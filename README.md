@@ -41,7 +41,9 @@ cd /opt/mishakrug_tg_bot
 Убедитесь, что у вас установлен Python 3.8 или выше. Затем установите необходимые зависимости:
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv venv
+source venv/bin/activate
+pip3 install -r requirements.txt
 ```
 
 ### 3. Создайте файл .env
@@ -58,8 +60,23 @@ ADMIN_CHAT_ID=your_admin_chat_id_here
 
 ### 4. Запустите бота
 
-```bash
-python3 mishakrug.py
+
+# Запуск бота в фоне с записью логов
+
+```
+nohup python3 mishakrug.py > mishakrug.log 2>&1 &
+```
+# Посмотреть логи
+
+```
+tail -f mishakrug.log
+```
+
+# Если нужно остановить бота, найдите его PID и завершите процесс
+
+```
+ps aux | grep python3
+kill <PID>
 ```
 
 ## 🖥 Запуск на удаленном сервере с Linux Ubuntu
@@ -91,6 +108,8 @@ cd /opt/mishakrug_tg_bot
 ### 4. Установите зависимости
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
@@ -100,8 +119,22 @@ pip3 install -r requirements.txt
 
 ### 6. Запустите бота
 
-```bash
-python3 mishakrug.py
+# Запуск бота в фоне с записью логов
+
+```
+nohup python3 mishakrug.py > mishakrug.log 2>&1 &
+```
+# Посмотреть логи
+
+```
+tail -f mishakrug.log
+```
+
+# Если нужно остановить бота, найдите его PID и завершите процесс
+
+```
+ps aux | grep python3
+kill <PID>
 ```
 
 ## 🔄 Обновление из удаленного репозитория
@@ -117,7 +150,7 @@ git pull origin main
 
 ```bash
 pkill -f "python3 mishakrug.py"
-python3 mishakrug.py &
+nohup python3 mishakrug.py > mishakrug.log 2>&1 &
 ```
 
 ## ⏰ Настройка cron для автозапуска
