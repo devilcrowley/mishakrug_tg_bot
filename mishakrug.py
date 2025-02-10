@@ -13,28 +13,35 @@ load_dotenv()
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Глобальная переменная для хранения состояния концерта
+concert_active = False
+
 # Функция для проверки админских прав
 def check_admin_rights(context: CallbackContext, chat_id: int, user_id: int) -> bool:
     bot_member = context.bot.get_chat_member(chat_id, user_id)
     return bot_member.status in ['administrator', 'creator'] and bot_member.can_restrict_members
 
-# Функция, которая будет вызываться при добавлении бота в чат
-def on_bot_added(update: Update, context: CallbackContext):
+# Функция для проверки, является ли пользователь администратором
+def is_admin(chat_id: int) -> bool:
+    admin_chat_id = int(os.getenv("ADMIN_CHAT_ID"))
+    return chat_id == admin_chat_id
+
+# Функция для запуска концерта
+def start_concert_command(update: Update, context: CallbackContext):
+    global concert_active
     chat_id = update.message.chat_id
-    user_id = context.bot.get_me().id
 
-    if not check_admin_rights(context, chat_id, user_id):
-        update.message.reply_text("Тут Круг объявлен иноагентом, добавь админом по-братски, обойдем эти санкции, этапом из Твери, зла немерено")
-    else:
-        update.message.reply_text("Спасибо за доверие! Буду следить за порядком.")
+    if not is_admin(chat_id):
+        update.message.reply_text("Ты не админ, Миша, всё х**ня, давай по новой.")
+        return
 
-# Функция для отправки сообщения и ограничения прав
-def start_concert(context: CallbackContext):
-    job = context.job
-    chat_id = job.context
+    if concert_active:
+        update.message.reply_text("Концерт уже идет, Миша в деле!")
+        return
 
-    context.bot.send_message(chat_id, "Я включаю Михаила Круга")
-    
+    concert_active = True
+    update.message.reply_text("Я включаю Михаила Круга")
+
     # Блокируем все типы сообщений, кроме видеосообщений
     permissions = ChatPermissions(
         can_send_messages=False,
@@ -48,13 +55,22 @@ def start_concert(context: CallbackContext):
     )
     context.bot.set_chat_permissions(chat_id, permissions)
 
-# Функция для завершения концерта
-def end_concert(context: CallbackContext):
-    job = context.job
-    chat_id = job.context
+# Функция для остановки концерта
+def stop_concert_command(update: Update, context: CallbackContext):
+    global concert_active
+    chat_id = update.message.chat_id
 
-    context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
-    
+    if not is_admin(chat_id):
+        update.message.reply_text("Ты не админ, Миша, всё х**ня, давай по новой.")
+        return
+
+    if not concert_active:
+        update.message.reply_text("Концерт уже окончен, мемасы доступны.")
+        return
+
+    concert_active = False
+    update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
+
     # Восстанавливаем все права
     permissions = ChatPermissions(
         can_send_messages=True,
@@ -91,6 +107,10 @@ def main():
 
     # Обработчик добавления бота в чат
     dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, on_bot_added))
+
+    # Команды для ручного запуска и остановки концерта
+    dp.add_handler(CommandHandler("start_concert", start_concert_command))
+    dp.add_handler(CommandHandler("stop_concert", stop_concert_command))
 
     # Планировщик задач
     updater.job_queue.run_once(schedule_concerts, when=0)
