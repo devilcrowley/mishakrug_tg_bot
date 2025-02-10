@@ -2,14 +2,17 @@ import os
 import pytz
 from datetime import datetime, time
 from dotenv import load_dotenv
+import logging
 from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    filters
+    filters,
+    JobQueue
 )
+from telegram.error import TelegramError
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -187,31 +190,49 @@ async def unregister_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 def main() -> None:
     """Запуск бота"""
-    # Создание приложения с явным указанием использования job_queue
-    application = (
-        Application.builder()
-        .token(TOKEN)
-        .build()
+    # Настройка логирования
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
     )
+    logger = logging.getLogger(__name__)
 
-    # Добавление обработчиков команд
-    application.add_handler(CommandHandler("start_concert", start_concert))
-    application.add_handler(CommandHandler("stop_concert", stop_concert))
-    application.add_handler(CommandHandler("register_chat", register_chat))
-    application.add_handler(CommandHandler("unregister_chat", unregister_chat))
+    try:
+        # Создание приложения с явным указанием использования job_queue
+        application = (
+            Application.builder()
+            .token(TOKEN)
+            .concurrent_updates(True)  # Включаем параллельную обработку обновлений
+            .job_queue(JobQueue())  # Явно включаем поддержку job_queue
+            .build()
+        )
 
-    # Настройка планировщика задач для проверки каждую минуту
-    application.job_queue.run_repeating(
-        check_schedule,
-        interval=60,
-        first=1  # Начать первую проверку через 1 секунду после запуска
-    )
+        # Добавление обработчиков команд
+        application.add_handler(CommandHandler("start_concert", start_concert))
+        application.add_handler(CommandHandler("stop_concert", stop_concert))
+        application.add_handler(CommandHandler("register_chat", register_chat))
+        application.add_handler(CommandHandler("unregister_chat", unregister_chat))
 
-    # Запуск бота с выводом информации о запуске
-    print("Бот запущен и готов к работе!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+        # Настройка планировщика задач для проверки каждую минуту
+        job_queue = application.job_queue
+        if job_queue:
+            job_queue.run_repeating(
+                check_schedule,
+                interval=60,
+                first=1  # Начать первую проверку через 1 секунду после запуска
+            )
+            logger.info("Планировщик задач успешно настроен")
+        else:
+            logger.error("Не удалось инициализировать планировщик задач!")
+            return
+
+        # Запуск бота с выводом информации о запуске
+        logger.info("Бот запущен и готов к работе!")
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    except Exception as e:
+        logger.error(f"Критическая ошибка при запуске бота: {e}")
+        raise
 
 if __name__ == '__main__':
     main()
-
-Terminal
