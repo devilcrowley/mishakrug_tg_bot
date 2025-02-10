@@ -81,51 +81,83 @@ async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Проверка расписания для автоматического запуска/остановки концерта"""
-    now = datetime.now(moscow_tz)
-    
-    # Получаем все чаты из контекста бота
-    for chat_id in context.bot_data.get('managed_chats', set()):
-        # Запуск концерта по понедельникам в 8:00
-        if now.weekday() == 0 and now.hour == 8 and now.minute == 0:
-            permissions = {
-                "can_send_messages": True,
-                "can_send_media_messages": True,
-                "can_send_other_messages": False,
-                "can_add_web_page_previews": False,
-                "can_send_polls": False,
-                "can_change_info": False,
-                "can_invite_users": True,
-                "can_pin_messages": False,
-                "can_send_photos": False,
-                "can_send_videos": True,
-                "can_send_audios": False,
-                "can_send_documents": False,
-                "can_send_video_notes": True,
-                "can_send_voice_notes": False,
-            }
-            await context.bot.set_chat_permissions(chat_id, permissions)
-            await context.bot.send_message(chat_id, "Я включаю Михаила Круга")
+    try:
+        now = datetime.now(moscow_tz)
+        
+        # Получаем все чаты из контекста бота
+        managed_chats = context.bot_data.get('managed_chats', set())
+        
+        if not managed_chats:
+            return  # Нет зарегистрированных чатов
             
-        # Остановка концерта каждый день в 23:59
-        elif now.hour == 23 and now.minute == 59:
-            permissions = {
-                "can_send_messages": True,
-                "can_send_media_messages": True,
-                "can_send_other_messages": True,
-                "can_add_web_page_previews": True,
-                "can_send_polls": True,
-                "can_change_info": False,
-                "can_invite_users": True,
-                "can_pin_messages": False,
-                "can_send_photos": True,
-                "can_send_videos": True,
-                "can_send_audios": True,
-                "can_send_documents": True,
-                "can_send_video_notes": True,
-                "can_send_voice_notes": True,
-            }
-            await context.bot.set_chat_permissions(chat_id, permissions)
-            await context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
+        print(f"[{now}] Проверка расписания. Зарегистрированные чаты: {managed_chats}")
+        
+        for chat_id in managed_chats:
+            try:
+                # Запуск концерта по понедельникам в 8:00
+                if now.weekday() == 0 and now.hour == 8 and now.minute == 0:
+                    permissions = {
+                        "can_send_messages": True,
+                        "can_send_media_messages": True,
+                        "can_send_other_messages": False,
+                        "can_add_web_page_previews": False,
+                        "can_send_polls": False,
+                        "can_change_info": False,
+                        "can_invite_users": True,
+                        "can_pin_messages": False,
+                        "can_send_photos": False,
+                        "can_send_videos": True,
+                        "can_send_audios": False,
+                        "can_send_documents": False,
+                        "can_send_video_notes": True,
+                        "can_send_voice_notes": False,
+                    }
+                    await context.bot.set_chat_permissions(chat_id, permissions)
+                    await context.bot.send_message(chat_id, "Я включаю Михаила Круга")
+                    print(f"[{now}] Запущен концерт в чате {chat_id}")
+                    
+                # Остановка концерта каждый день в 23:59
+                elif now.hour == 23 and now.minute == 59:
+                    permissions = {
+                        "can_send_messages": True,
+                        "can_send_media_messages": True,
+                        "can_send_other_messages": True,
+                        "can_add_web_page_previews": True,
+                        "can_send_polls": True,
+                        "can_change_info": False,
+                        "can_invite_users": True,
+                        "can_pin_messages": False,
+                        "can_send_photos": True,
+                        "can_send_videos": True,
+                        "can_send_audios": True,
+                        "can_send_documents": True,
+                        "can_send_video_notes": True,
+                        "can_send_voice_notes": True,
+                    }
+                    await context.bot.set_chat_permissions(chat_id, permissions)
+                    await context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
+                    print(f"[{now}] Остановлен концерт в чате {chat_id}")
+                    
+            except Exception as chat_error:
+                print(f"[{now}] Ошибка при обработке чата {chat_id}: {chat_error}")
+                # Отправляем сообщение об ошибке администратору
+                try:
+                    await context.bot.send_message(
+                        ADMIN_CHAT_ID,
+                        f"Ошибка при обработке чата {chat_id}:\n{str(chat_error)}"
+                    )
+                except Exception as admin_msg_error:
+                    print(f"[{now}] Не удалось отправить сообщение администратору: {admin_msg_error}")
+                    
+    except Exception as e:
+        print(f"[{now}] Глобальная ошибка в check_schedule: {e}")
+        try:
+            await context.bot.send_message(
+                ADMIN_CHAT_ID,
+                f"Глобальная ошибка в check_schedule:\n{str(e)}"
+            )
+        except Exception as admin_msg_error:
+            print(f"[{now}] Не удалось отправить сообщение администратору: {admin_msg_error}")
 
 async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Регистрация чата для управления концертами"""
@@ -155,8 +187,12 @@ async def unregister_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 def main() -> None:
     """Запуск бота"""
-    # Создание приложения
-    application = Application.builder().token(TOKEN).build()
+    # Создание приложения с явным указанием использования job_queue
+    application = (
+        Application.builder()
+        .token(TOKEN)
+        .build()
+    )
 
     # Добавление обработчиков команд
     application.add_handler(CommandHandler("start_concert", start_concert))
@@ -164,14 +200,18 @@ def main() -> None:
     application.add_handler(CommandHandler("register_chat", register_chat))
     application.add_handler(CommandHandler("unregister_chat", unregister_chat))
 
-    # Настройка планировщика задач
-    job_queue = application.job_queue
-    
-    # Проверка расписания каждую минуту
-    job_queue.run_repeating(check_schedule, interval=60)
+    # Настройка планировщика задач для проверки каждую минуту
+    application.job_queue.run_repeating(
+        check_schedule,
+        interval=60,
+        first=1  # Начать первую проверку через 1 секунду после запуска
+    )
 
-    # Запуск бота
+    # Запуск бота с выводом информации о запуске
+    print("Бот запущен и готов к работе!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
+
+Terminal
