@@ -54,9 +54,8 @@ async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     try:
         await context.bot.set_chat_permissions(chat_id, permissions)
-        reply = await update.message.reply_text("Я включаю Михаила Круга")
+        await update.message.reply_text("Я включаю Михаила Круга")
         await update.message.delete()
-        await reply.delete()
     except Exception as e:
         error_msg = await update.message.reply_text(f"Ошибка при запуске концерта: {str(e)}")
         await error_msg.delete()
@@ -91,9 +90,8 @@ async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     try:
         await context.bot.set_chat_permissions(chat_id, permissions)
-        reply = await update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
+        await update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
         await update.message.delete()
-        await reply.delete()
     except Exception as e:
         error_msg = await update.message.reply_text(f"Ошибка при остановке концерта: {str(e)}")
         await error_msg.delete()
