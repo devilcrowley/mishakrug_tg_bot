@@ -38,7 +38,6 @@ async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Установка разрешений для чата (разрешаем только видеокружочки)
     permissions = ChatPermissions(
         can_send_messages=False, 
-        can_send_media_messages=False, 
         can_send_other_messages=False,
         can_add_web_page_previews=False,
         can_send_polls=False,
@@ -76,7 +75,6 @@ async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Восстановление всех прав
     permissions = ChatPermissions(
         can_send_messages=True,
-        can_send_media_messages=True,
         can_send_other_messages=True,
         can_add_web_page_previews=True,
         can_send_polls=True,
@@ -129,7 +127,6 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
                     # Разрешаем только видеокружочки
                     permissions = ChatPermissions(
                         can_send_messages=False, 
-                        can_send_media_messages=False, 
                         can_send_other_messages=False,
                         can_add_web_page_previews=False,
                         can_send_polls=False,
