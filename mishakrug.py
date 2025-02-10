@@ -28,9 +28,7 @@ moscow_tz = pytz.timezone('Europe/Moscow')
 async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Запуск концерта вручную (только для администратора)"""
     if update.effective_user.id != ADMIN_CHAT_ID:
-        reply = await update.message.reply_text("Только администратор может запускать концерт!")
-        await reply.delete()
-        await update.message.delete()
+        await update.message.reply_text("Только администратор может запускать концерт!")
         return
 
     chat_id = update.effective_chat.id
@@ -64,9 +62,7 @@ async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Остановка концерта вручную (только для администратора)"""
     if update.effective_user.id != ADMIN_CHAT_ID:
-        reply = await update.message.reply_text("Только администратор может останавливать концерт!")
-        await reply.delete()
-        await update.message.delete()
+        await update.message.reply_text("Только администратор может останавливать концерт!")
         return
 
     chat_id = update.effective_chat.id
