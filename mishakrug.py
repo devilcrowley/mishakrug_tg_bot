@@ -3,7 +3,8 @@ import pytz
 from datetime import datetime, time
 from dotenv import load_dotenv
 import logging
-from telegram import Update
+from pathlib import Path
+from telegram import Update, ChatPermissions
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -27,60 +28,78 @@ moscow_tz = pytz.timezone('Europe/Moscow')
 async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Запуск концерта вручную (только для администратора)"""
     if update.effective_user.id != ADMIN_CHAT_ID:
-        await update.message.reply_text("Только администратор может запускать концерт!")
+        reply = await update.message.reply_text("Только администратор может запускать концерт!")
+        await reply.delete()
+        await update.message.delete()
         return
 
     chat_id = update.effective_chat.id
     
-    # Установка разрешений для чата
-    permissions = {
-        "can_send_messages": True,
-        "can_send_media_messages": True,
-        "can_send_other_messages": False,
-        "can_add_web_page_previews": False,
-        "can_send_polls": False,
-        "can_change_info": False,
-        "can_invite_users": True,
-        "can_pin_messages": False,
-        "can_send_photos": False,
-        "can_send_videos": True,
-        "can_send_audios": False,
-        "can_send_documents": False,
-        "can_send_video_notes": True,
-        "can_send_voice_notes": False,
-    }
+    # Установка разрешений для чата (разрешаем только видеокружочки)
+    permissions = ChatPermissions(
+        can_send_messages=False,  # Запрещаем текстовые сообщения
+        can_send_media_messages=False,  # Запрещаем медиа в целом
+        can_send_other_messages=False,
+        can_add_web_page_previews=False,
+        can_send_polls=False,
+        can_change_info=False,
+        can_invite_users=True,
+        can_pin_messages=False,
+        can_send_photos=False,
+        can_send_videos=False,  # Запрещаем обычные видео
+        can_send_audios=False,
+        can_send_documents=False,
+        can_send_video_notes=True,  # Разрешаем только видеокружочки
+        can_send_voice_notes=False
+    )
     
-    await context.bot.set_chat_permissions(chat_id, permissions)
-    await update.message.reply_text("Я включаю Михаила Круга")
+    try:
+        await context.bot.set_chat_permissions(chat_id, permissions)
+        reply = await update.message.reply_text("Я включаю Михаила Круга")
+        await update.message.delete()
+        await reply.delete()
+    except Exception as e:
+        error_msg = await update.message.reply_text(f"Ошибка при запуске концерта: {str(e)}")
+        await error_msg.delete()
+        await update.message.delete()
 
 async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Остановка концерта вручную (только для администратора)"""
     if update.effective_user.id != ADMIN_CHAT_ID:
-        await update.message.reply_text("Только администратор может останавливать концерт!")
+        reply = await update.message.reply_text("Только администратор может останавливать концерт!")
+        await reply.delete()
+        await update.message.delete()
         return
 
     chat_id = update.effective_chat.id
     
     # Восстановление всех прав
-    permissions = {
-        "can_send_messages": True,
-        "can_send_media_messages": True,
-        "can_send_other_messages": True,
-        "can_add_web_page_previews": True,
-        "can_send_polls": True,
-        "can_change_info": False,
-        "can_invite_users": True,
-        "can_pin_messages": False,
-        "can_send_photos": True,
-        "can_send_videos": True,
-        "can_send_audios": True,
-        "can_send_documents": True,
-        "can_send_video_notes": True,
-        "can_send_voice_notes": True,
-    }
+    permissions = ChatPermissions(
+        can_send_messages=True,
+        can_send_media_messages=True,
+        can_send_other_messages=True,
+        can_add_web_page_previews=True,
+        can_send_polls=True,
+        can_change_info=False,
+        can_invite_users=True,
+        can_pin_messages=False,
+        can_send_photos=True,
+        can_send_videos=True,
+        can_send_audios=True,
+        can_send_documents=True,
+        can_send_video_notes=True,
+        can_send_voice_notes=True
+    )
     
-    await context.bot.set_chat_permissions(chat_id, permissions)
-    await update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
+    try:
+        await context.bot.set_chat_permissions(chat_id, permissions)
+        reply = await update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
+        await update.message.delete()
+        await reply.delete()
+    except Exception as e:
+        error_msg = await update.message.reply_text(f"Ошибка при остановке концерта: {str(e)}")
+        await error_msg.delete()
+        await update.message.delete()
 
 async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Проверка расписания для автоматического запуска/остановки концерта"""
@@ -99,66 +118,80 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
             try:
                 # Запуск концерта по понедельникам в 8:00
                 if now.weekday() == 0 and now.hour == 8 and now.minute == 0:
-                    permissions = {
-                        "can_send_messages": True,
-                        "can_send_media_messages": True,
-                        "can_send_other_messages": False,
-                        "can_add_web_page_previews": False,
-                        "can_send_polls": False,
-                        "can_change_info": False,
-                        "can_invite_users": True,
-                        "can_pin_messages": False,
-                        "can_send_photos": False,
-                        "can_send_videos": True,
-                        "can_send_audios": False,
-                        "can_send_documents": False,
-                        "can_send_video_notes": True,
-                        "can_send_voice_notes": False,
-                    }
+                    # Удаляем лог-файл перед запуском концерта
+                    log_file = Path(os.path.dirname(os.path.abspath(__file__))) / 'mishakrug.log'
+                    if log_file.exists():
+                        try:
+                            log_file.unlink()
+                            print(f"[{now}] Лог-файл успешно удален")
+                        except Exception as log_error:
+                            print(f"[{now}] Ошибка при удалении лог-файла: {log_error}")
+                    # Разрешаем только видеокружочки
+                    permissions = ChatPermissions(
+                        can_send_messages=False,  # Запрещаем текстовые сообщения
+                        can_send_media_messages=False,  # Запрещаем медиа в целом
+                        can_send_other_messages=False,
+                        can_add_web_page_previews=False,
+                        can_send_polls=False,
+                        can_change_info=False,
+                        can_invite_users=True,
+                        can_pin_messages=False,
+                        can_send_photos=False,
+                        can_send_videos=False,  # Запрещаем обычные видео
+                        can_send_audios=False,
+                        can_send_documents=False,
+                        can_send_video_notes=True,  # Разрешаем только видеокружочки
+                        can_send_voice_notes=False
+                    )
                     await context.bot.set_chat_permissions(chat_id, permissions)
-                    await context.bot.send_message(chat_id, "Я включаю Михаила Круга")
+                    msg = await context.bot.send_message(chat_id, "Я включаю Михаила Круга")
                     print(f"[{now}] Запущен концерт в чате {chat_id}")
+                    await msg.delete()
                     
                 # Остановка концерта каждый день в 23:59
                 elif now.hour == 23 and now.minute == 59:
-                    permissions = {
-                        "can_send_messages": True,
-                        "can_send_media_messages": True,
-                        "can_send_other_messages": True,
-                        "can_add_web_page_previews": True,
-                        "can_send_polls": True,
-                        "can_change_info": False,
-                        "can_invite_users": True,
-                        "can_pin_messages": False,
-                        "can_send_photos": True,
-                        "can_send_videos": True,
-                        "can_send_audios": True,
-                        "can_send_documents": True,
-                        "can_send_video_notes": True,
-                        "can_send_voice_notes": True,
-                    }
+                    # Восстанавливаем все права
+                    permissions = ChatPermissions(
+                        can_send_messages=True,
+                        can_send_media_messages=True,
+                        can_send_other_messages=True,
+                        can_add_web_page_previews=True,
+                        can_send_polls=True,
+                        can_change_info=False,
+                        can_invite_users=True,
+                        can_pin_messages=False,
+                        can_send_photos=True,
+                        can_send_videos=True,
+                        can_send_audios=True,
+                        can_send_documents=True,
+                        can_send_video_notes=True,
+                        can_send_voice_notes=True
+                    )
                     await context.bot.set_chat_permissions(chat_id, permissions)
-                    await context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
+                    msg = await context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
                     print(f"[{now}] Остановлен концерт в чате {chat_id}")
+                    await msg.delete()
                     
             except Exception as chat_error:
                 print(f"[{now}] Ошибка при обработке чата {chat_id}: {chat_error}")
                 # Отправляем сообщение об ошибке администратору
                 try:
-                    await context.bot.send_message(
+                    error_msg = await context.bot.send_message(
                         ADMIN_CHAT_ID,
                         f"Ошибка при обработке чата {chat_id}:\n{str(chat_error)}"
                     )
+                    await error_msg.delete()
                 except Exception as admin_msg_error:
                     print(f"[{now}] Не удалось отправить сообщение администратору: {admin_msg_error}")
                     
     except Exception as e:
         print(f"[{now}] Глобальная ошибка в check_schedule: {e}")
         try:
-            await context.bot.send_message(
+            error_msg = await context.bot.send_message(
                 ADMIN_CHAT_ID,
                 f"Глобальная ошибка в check_schedule:\n{str(e)}"
             )
+            await error_msg.delete()
         except Exception as admin_msg_error:
             print(f"[{now}] Не удалось отправить сообщение администратору: {admin_msg_error}")
 
