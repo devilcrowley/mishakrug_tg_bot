@@ -163,7 +163,7 @@ nohup python3 mishakrug.py > mishakrug.log 2>&1 &
 #!/bin/bash
 
 if ! pgrep -f "python3 mishakrug.py"; then
-    python3 /opt/mishakrug_tg_bot/mishakrug.py &
+    nohup python3 mishakrug.py > mishakrug.log 2>&1 &
     echo "Бот запущен."
 else
     echo "Бот уже работает."
