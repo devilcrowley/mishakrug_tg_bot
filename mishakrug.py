@@ -1,123 +1,177 @@
-import logging
-from telegram import Update, ChatPermissions
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import datetime
-import pytz
-from dotenv import load_dotenv
 import os
+import pytz
+from datetime import datetime, time
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters
+)
 
-# Загрузка переменных окружения из файла .env
+# Загрузка переменных окружения
 load_dotenv()
 
-# Настройка логирования
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Получение токена и chat_id администратора из переменных окружения
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID'))
 
-# Глобальная переменная для хранения состояния концерта
-concert_active = False
+# Московское время
+moscow_tz = pytz.timezone('Europe/Moscow')
 
-# Функция для проверки админских прав
-def check_admin_rights(context: CallbackContext, chat_id: int, user_id: int) -> bool:
-    bot_member = context.bot.get_chat_member(chat_id, user_id)
-    return bot_member.status in ['administrator', 'creator'] and bot_member.can_restrict_members
-
-# Функция для проверки, является ли пользователь администратором
-def is_admin(chat_id: int) -> bool:
-    admin_chat_id = int(os.getenv("ADMIN_CHAT_ID"))
-    return chat_id == admin_chat_id
-
-# Функция для запуска концерта
-def start_concert_command(update: Update, context: CallbackContext):
-    global concert_active
-    chat_id = update.message.chat_id
-
-    if not is_admin(chat_id):
-        update.message.reply_text("Ты не админ, Миша, всё х**ня, давай по новой.")
+async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запуск концерта вручную (только для администратора)"""
+    if update.effective_user.id != ADMIN_CHAT_ID:
+        await update.message.reply_text("Только администратор может запускать концерт!")
         return
 
-    if concert_active:
-        update.message.reply_text("Концерт уже идет, Миша в деле!")
+    chat_id = update.effective_chat.id
+    
+    # Установка разрешений для чата
+    permissions = {
+        "can_send_messages": True,
+        "can_send_media_messages": True,
+        "can_send_other_messages": False,
+        "can_add_web_page_previews": False,
+        "can_send_polls": False,
+        "can_change_info": False,
+        "can_invite_users": True,
+        "can_pin_messages": False,
+        "can_send_photos": False,
+        "can_send_videos": True,
+        "can_send_audios": False,
+        "can_send_documents": False,
+        "can_send_video_notes": True,
+        "can_send_voice_notes": False,
+    }
+    
+    await context.bot.set_chat_permissions(chat_id, permissions)
+    await update.message.reply_text("Я включаю Михаила Круга")
+
+async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Остановка концерта вручную (только для администратора)"""
+    if update.effective_user.id != ADMIN_CHAT_ID:
+        await update.message.reply_text("Только администратор может останавливать концерт!")
         return
 
-    concert_active = True
-    update.message.reply_text("Я включаю Михаила Круга")
+    chat_id = update.effective_chat.id
+    
+    # Восстановление всех прав
+    permissions = {
+        "can_send_messages": True,
+        "can_send_media_messages": True,
+        "can_send_other_messages": True,
+        "can_add_web_page_previews": True,
+        "can_send_polls": True,
+        "can_change_info": False,
+        "can_invite_users": True,
+        "can_pin_messages": False,
+        "can_send_photos": True,
+        "can_send_videos": True,
+        "can_send_audios": True,
+        "can_send_documents": True,
+        "can_send_video_notes": True,
+        "can_send_voice_notes": True,
+    }
+    
+    await context.bot.set_chat_permissions(chat_id, permissions)
+    await update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
 
-    # Блокируем все типы сообщений, кроме видеосообщений
-    permissions = ChatPermissions(
-        can_send_messages=False,
-        can_send_media_messages=False,
-        can_send_polls=False,
-        can_send_other_messages=False,
-        can_add_web_page_previews=False,
-        can_change_info=False,
-        can_invite_users=False,
-        can_pin_messages=False,
-    )
-    context.bot.set_chat_permissions(chat_id, permissions)
-
-# Функция для остановки концерта
-def stop_concert_command(update: Update, context: CallbackContext):
-    global concert_active
-    chat_id = update.message.chat_id
-
-    if not is_admin(chat_id):
-        update.message.reply_text("Ты не админ, Миша, всё х**ня, давай по новой.")
-        return
-
-    if not concert_active:
-        update.message.reply_text("Концерт уже окончен, мемасы доступны.")
-        return
-
-    concert_active = False
-    update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
-
-    # Восстанавливаем все права
-    permissions = ChatPermissions(
-        can_send_messages=True,
-        can_send_media_messages=True,
-        can_send_polls=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True,
-        can_change_info=True,
-        can_invite_users=True,
-        can_pin_messages=True,
-    )
-    context.bot.set_chat_permissions(chat_id, permissions)
-
-# Функция для планирования задач
-def schedule_concerts(context: CallbackContext):
-    # Получаем список всех чатов, где есть бот
-    for chat_id in context.bot.get_updates():
-        if check_admin_rights(context, chat_id, context.bot.get_me().id):
-            # Планируем начало концерта на каждый понедельник в 8:00 по Москве
-            context.job_queue.run_daily(start_concert, time=datetime.time(hour=8, minute=0, tzinfo=pytz.timezone('Europe/Moscow')), days=(0,), context=chat_id)
+async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Проверка расписания для автоматического запуска/остановки концерта"""
+    now = datetime.now(moscow_tz)
+    
+    # Получаем все чаты из контекста бота
+    for chat_id in context.bot_data.get('managed_chats', set()):
+        # Запуск концерта по понедельникам в 8:00
+        if now.weekday() == 0 and now.hour == 8 and now.minute == 0:
+            permissions = {
+                "can_send_messages": True,
+                "can_send_media_messages": True,
+                "can_send_other_messages": False,
+                "can_add_web_page_previews": False,
+                "can_send_polls": False,
+                "can_change_info": False,
+                "can_invite_users": True,
+                "can_pin_messages": False,
+                "can_send_photos": False,
+                "can_send_videos": True,
+                "can_send_audios": False,
+                "can_send_documents": False,
+                "can_send_video_notes": True,
+                "can_send_voice_notes": False,
+            }
+            await context.bot.set_chat_permissions(chat_id, permissions)
+            await context.bot.send_message(chat_id, "Я включаю Михаила Круга")
             
-            # Планируем завершение концерта на каждый день в 23:59 по Москве
-            context.job_queue.run_daily(end_concert, time=datetime.time(hour=23, minute=59, tzinfo=pytz.timezone('Europe/Moscow')), days=(0,), context=chat_id)
+        # Остановка концерта каждый день в 23:59
+        elif now.hour == 23 and now.minute == 59:
+            permissions = {
+                "can_send_messages": True,
+                "can_send_media_messages": True,
+                "can_send_other_messages": True,
+                "can_add_web_page_previews": True,
+                "can_send_polls": True,
+                "can_change_info": False,
+                "can_invite_users": True,
+                "can_pin_messages": False,
+                "can_send_photos": True,
+                "can_send_videos": True,
+                "can_send_audios": True,
+                "can_send_documents": True,
+                "can_send_video_notes": True,
+                "can_send_voice_notes": True,
+            }
+            await context.bot.set_chat_permissions(chat_id, permissions)
+            await context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
 
-def main():
-    # Загрузка токена из переменной окружения
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    if not token:
-        raise ValueError("Токен бота не найден в файле .env")
+async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Регистрация чата для управления концертами"""
+    if update.effective_user.id != ADMIN_CHAT_ID:
+        await update.message.reply_text("Только администратор может регистрировать чаты!")
+        return
+        
+    chat_id = update.effective_chat.id
+    if 'managed_chats' not in context.bot_data:
+        context.bot_data['managed_chats'] = set()
+    
+    context.bot_data['managed_chats'].add(chat_id)
+    await update.message.reply_text("Чат зарегистрирован для управления концертами!")
 
-    updater = Updater(token, use_context=True)
+async def unregister_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отмена регистрации чата"""
+    if update.effective_user.id != ADMIN_CHAT_ID:
+        await update.message.reply_text("Только администратор может отменять регистрацию чатов!")
+        return
+        
+    chat_id = update.effective_chat.id
+    if 'managed_chats' in context.bot_data and chat_id in context.bot_data['managed_chats']:
+        context.bot_data['managed_chats'].remove(chat_id)
+        await update.message.reply_text("Регистрация чата отменена!")
+    else:
+        await update.message.reply_text("Этот чат не был зарегистрирован!")
 
-    dp = updater.dispatcher
+def main() -> None:
+    """Запуск бота"""
+    # Создание приложения
+    application = Application.builder().token(TOKEN).build()
 
-    # Обработчик добавления бота в чат
-    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, on_bot_added))
+    # Добавление обработчиков команд
+    application.add_handler(CommandHandler("start_concert", start_concert))
+    application.add_handler(CommandHandler("stop_concert", stop_concert))
+    application.add_handler(CommandHandler("register_chat", register_chat))
+    application.add_handler(CommandHandler("unregister_chat", unregister_chat))
 
-    # Команды для ручного запуска и остановки концерта
-    dp.add_handler(CommandHandler("start_concert", start_concert_command))
-    dp.add_handler(CommandHandler("stop_concert", stop_concert_command))
-
-    # Планировщик задач
-    updater.job_queue.run_once(schedule_concerts, when=0)
+    # Настройка планировщика задач
+    job_queue = application.job_queue
+    
+    # Проверка расписания каждую минуту
+    job_queue.run_repeating(check_schedule, interval=60)
 
     # Запуск бота
-    updater.start_polling()
-    updater.idle()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
