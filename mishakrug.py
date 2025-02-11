@@ -18,20 +18,38 @@ from telegram.error import TelegramError, BadRequest
 # Загрузка переменных окружения
 load_dotenv()
 
-# Получение токена из переменных окружения
+# Получение настроек из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+MODE = os.getenv('MODE', 'secured').lower()  # По умолчанию используем secured режим
 
-# Получение списка ID администраторов
-ADMIN_CHAT_IDS = set(int(admin_id.strip()) for admin_id in os.getenv('ADMIN_CHAT_ID').split(','))
+# Получение списка ID администраторов (используется только в secured режиме)
+ADMIN_CHAT_IDS = set(int(admin_id.strip()) for admin_id in os.getenv('ADMIN_CHAT_ID').split(',')) if MODE == 'secured' else set()
 
 # Московское время
 moscow_tz = pytz.timezone('Europe/Moscow')
 
+async def is_user_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Проверка, является ли пользователь администратором чата"""
+    try:
+        chat_member = await context.bot.get_chat_member(chat_id, user_id)
+        return isinstance(chat_member, ChatMemberAdministrator) or chat_member.status == 'creator'
+    except TelegramError:
+        return False
+
 async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Запуск концерта вручную (только для администратора)"""
-    if update.effective_user.id not in ADMIN_CHAT_IDS:
-        await update.message.reply_text("Только администратор может запускать концерт!")
-        return
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+
+    # Проверка прав в зависимости от режима
+    if MODE == 'secured':
+        if user_id not in ADMIN_CHAT_IDS:
+            await update.message.reply_text("❌ Только администратор бота может запускать концерт!")
+            return
+    else:  # public mode
+        if not await is_user_admin(chat_id, user_id, context):
+            await update.message.reply_text("❌ Только администратор чата может запускать концерт!")
+            return
 
     chat_id = update.effective_chat.id
     
@@ -102,9 +120,18 @@ async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Остановка концерта вручную (только для администратора)"""
-    if update.effective_user.id not in ADMIN_CHAT_IDS:
-        await update.message.reply_text("Только администратор может останавливать концерт!")
-        return
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+
+    # Проверка прав в зависимости от режима
+    if MODE == 'secured':
+        if user_id not in ADMIN_CHAT_IDS:
+            await update.message.reply_text("❌ Только администратор бота может останавливать концерт!")
+            return
+    else:  # public mode
+        if not await is_user_admin(chat_id, user_id, context):
+            await update.message.reply_text("❌ Только администратор чата может останавливать концерт!")
+            return
 
     chat_id = update.effective_chat.id
     
@@ -178,13 +205,24 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         now = datetime.now(moscow_tz)
         
-        # Получаем все чаты из контекста бота
-        managed_chats = context.bot_data.get('managed_chats', set())
-        
-        if not managed_chats:
-            return  # Нет зарегистрированных чатов
-            
-        print(f"[{now}] Проверка расписания. Зарегистрированные чаты: {managed_chats}")
+        if MODE == 'secured':
+            # В secured режиме работаем только с зарегистрированными чатами
+            managed_chats = context.bot_data.get('managed_chats', set())
+            if not managed_chats:
+                return  # Нет зарегистрированных чатов
+            print(f"[{now}] Проверка расписания. Зарегистрированные чаты: {managed_chats}")
+        else:
+            # В public режиме получаем список всех чатов, где бот является администратором
+            managed_chats = set()
+            if 'all_chats' in context.bot_data:
+                for chat_id in context.bot_data['all_chats']:
+                    try:
+                        bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+                        if isinstance(bot_member, ChatMemberAdministrator) and bot_member.can_restrict_members:
+                            managed_chats.add(chat_id)
+                    except TelegramError:
+                        continue
+            print(f"[{now}] Проверка расписания. Активные чаты: {managed_chats}")
         
         for chat_id in managed_chats:
             try:
@@ -271,9 +309,13 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
                 print(f"[{now}] Не удалось отправить сообщение администратору {admin_id}: {admin_msg_error}")
 
 async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Регистрация чата для управления концертами"""
+    """Регистрация чата для управления концертами (только в secured режиме)"""
+    if MODE != 'secured':
+        await update.message.reply_text("❌ Регистрация чатов доступна только в secured режиме!")
+        return
+        
     if update.effective_user.id not in ADMIN_CHAT_IDS:
-        await update.message.reply_text("Только администратор может регистрировать чаты!")
+        await update.message.reply_text("❌ Только администратор бота может регистрировать чаты!")
         return
         
     chat_id = update.effective_chat.id
@@ -284,9 +326,13 @@ async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text("Чат зарегистрирован для управления концертами!")
 
 async def unregister_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Отмена регистрации чата"""
+    """Отмена регистрации чата (только в secured режиме)"""
+    if MODE != 'secured':
+        await update.message.reply_text("❌ Отмена регистрации чатов доступна только в secured режиме!")
+        return
+        
     if update.effective_user.id not in ADMIN_CHAT_IDS:
-        await update.message.reply_text("Только администратор может отменять регистрацию чатов!")
+        await update.message.reply_text("❌ Только администратор бота может отменять регистрацию чатов!")
         return
         
     chat_id = update.effective_chat.id
@@ -295,6 +341,17 @@ async def unregister_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text("Регистрация чата отменена!")
     else:
         await update.message.reply_text("Этот чат не был зарегистрирован!")
+
+async def track_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Отслеживание новых чатов в public режиме"""
+    if MODE != 'public':
+        return
+        
+    chat_id = update.effective_chat.id
+    if 'all_chats' not in context.bot_data:
+        context.bot_data['all_chats'] = set()
+    context.bot_data['all_chats'].add(chat_id)
+    print(f"Бот добавлен в новый чат: {chat_id}")
 
 def main() -> None:
     """Запуск бота"""
@@ -318,8 +375,14 @@ def main() -> None:
         # Добавление обработчиков команд
         application.add_handler(CommandHandler("start_concert", start_concert))
         application.add_handler(CommandHandler("stop_concert", stop_concert))
-        application.add_handler(CommandHandler("register_chat", register_chat))
-        application.add_handler(CommandHandler("unregister_chat", unregister_chat))
+        
+        # Добавляем обработчики для secured режима
+        if MODE == 'secured':
+            application.add_handler(CommandHandler("register_chat", register_chat))
+            application.add_handler(CommandHandler("unregister_chat", unregister_chat))
+        else:  # public mode
+            # Отслеживаем добавление бота в новые чаты
+            application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, track_chat))
 
         # Настройка планировщика задач для проверки каждую минуту
         job_queue = application.job_queue
