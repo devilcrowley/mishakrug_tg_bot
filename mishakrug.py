@@ -18,16 +18,18 @@ from telegram.error import TelegramError
 # Загрузка переменных окружения
 load_dotenv()
 
-# Получение токена и chat_id администратора из переменных окружения
+# Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID'))
+
+# Получение списка ID администраторов
+ADMIN_CHAT_IDS = set(int(admin_id.strip()) for admin_id in os.getenv('ADMIN_CHAT_ID').split(','))
 
 # Московское время
 moscow_tz = pytz.timezone('Europe/Moscow')
 
 async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Запуск концерта вручную (только для администратора)"""
-    if update.effective_user.id != ADMIN_CHAT_ID:
+    if update.effective_user.id not in ADMIN_CHAT_IDS:
         await update.message.reply_text("Только администратор может запускать концерт!")
         return
 
@@ -61,7 +63,7 @@ async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Остановка концерта вручную (только для администратора)"""
-    if update.effective_user.id != ADMIN_CHAT_ID:
+    if update.effective_user.id not in ADMIN_CHAT_IDS:
         await update.message.reply_text("Только администратор может останавливать концерт!")
         return
 
@@ -73,9 +75,9 @@ async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         can_send_other_messages=True,
         can_add_web_page_previews=True,
         can_send_polls=True,
-        can_change_info=True,
+        can_change_info=False,
         can_invite_users=True,
-        can_pin_messages=True,
+        can_pin_messages=False,
         can_send_photos=True,
         can_send_videos=True,
         can_send_audios=True,
@@ -148,9 +150,9 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
                         can_send_other_messages=True,
                         can_add_web_page_previews=True,
                         can_send_polls=True,
-                        can_change_info=True,
+                        can_change_info=False,
                         can_invite_users=True,
-                        can_pin_messages=True,
+                        can_pin_messages=False,
                         can_send_photos=True,
                         can_send_videos=True,
                         can_send_audios=True,
@@ -166,29 +168,33 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as chat_error:
                 print(f"[{now}] Ошибка при обработке чата {chat_id}: {chat_error}")
                 # Отправляем сообщение об ошибке администратору
-                try:
-                    error_msg = await context.bot.send_message(
-                        ADMIN_CHAT_ID,
-                        f"Ошибка при обработке чата {chat_id}:\n{str(chat_error)}"
-                    )
-                    await error_msg.delete()
-                except Exception as admin_msg_error:
-                    print(f"[{now}] Не удалось отправить сообщение администратору: {admin_msg_error}")
+                # Отправляем сообщение об ошибке всем администраторам
+                for admin_id in ADMIN_CHAT_IDS:
+                    try:
+                        error_msg = await context.bot.send_message(
+                            admin_id,
+                            f"Ошибка при обработке чата {chat_id}:\n{str(chat_error)}"
+                        )
+                        await error_msg.delete()
+                    except Exception as admin_msg_error:
+                        print(f"[{now}] Не удалось отправить сообщение администратору {admin_id}: {admin_msg_error}")
                     
     except Exception as e:
         print(f"[{now}] Глобальная ошибка в check_schedule: {e}")
-        try:
-            error_msg = await context.bot.send_message(
-                ADMIN_CHAT_ID,
-                f"Глобальная ошибка в check_schedule:\n{str(e)}"
-            )
-            await error_msg.delete()
-        except Exception as admin_msg_error:
-            print(f"[{now}] Не удалось отправить сообщение администратору: {admin_msg_error}")
+        # Отправляем сообщение об ошибке всем администраторам
+        for admin_id in ADMIN_CHAT_IDS:
+            try:
+                error_msg = await context.bot.send_message(
+                    admin_id,
+                    f"Глобальная ошибка в check_schedule:\n{str(e)}"
+                )
+                await error_msg.delete()
+            except Exception as admin_msg_error:
+                print(f"[{now}] Не удалось отправить сообщение администратору {admin_id}: {admin_msg_error}")
 
 async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Регистрация чата для управления концертами"""
-    if update.effective_user.id != ADMIN_CHAT_ID:
+    if update.effective_user.id not in ADMIN_CHAT_IDS:
         await update.message.reply_text("Только администратор может регистрировать чаты!")
         return
         
@@ -201,7 +207,7 @@ async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def unregister_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отмена регистрации чата"""
-    if update.effective_user.id != ADMIN_CHAT_ID:
+    if update.effective_user.id not in ADMIN_CHAT_IDS:
         await update.message.reply_text("Только администратор может отменять регистрацию чатов!")
         return
         
