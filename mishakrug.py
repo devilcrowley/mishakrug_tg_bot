@@ -4,7 +4,7 @@ from datetime import datetime, time
 from dotenv import load_dotenv
 import logging
 from pathlib import Path
-from telegram import Update, ChatPermissions
+from telegram import Update, ChatPermissions, ChatMemberAdministrator
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -55,12 +55,23 @@ async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         # Проверяем права бота в чате
         bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
-        if not bot_member.can_restrict_members:
-            await update.message.reply_text("❌ Ошибка: У меня нет прав администратора в этом чате.\n"
+        if not isinstance(bot_member, ChatMemberAdministrator):
+            await update.message.reply_text("❌ Ошибка: Я не являюсь администратором в этом чате.\n"
                                           "Пожалуйста, назначьте меня администратором с правами:\n"
                                           "- Удаление сообщений\n"
                                           "- Блокировка участников\n"
                                           "- Управление правами участников")
+            return
+            
+        if not (bot_member.can_restrict_members and bot_member.can_delete_messages):
+            missing_rights = []
+            if not bot_member.can_restrict_members:
+                missing_rights.append("- Управление правами участников")
+            if not bot_member.can_delete_messages:
+                missing_rights.append("- Удаление сообщений")
+                
+            await update.message.reply_text("❌ Ошибка: У меня недостаточно прав администратора.\n"
+                                          "Необходимые права:\n" + "\n".join(missing_rights))
             return
 
         # Пробуем установить разрешения
@@ -117,12 +128,23 @@ async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         # Проверяем права бота в чате
         bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
-        if not bot_member.can_restrict_members:
-            await update.message.reply_text("❌ Ошибка: У меня нет прав администратора в этом чате.\n"
+        if not isinstance(bot_member, ChatMemberAdministrator):
+            await update.message.reply_text("❌ Ошибка: Я не являюсь администратором в этом чате.\n"
                                           "Пожалуйста, назначьте меня администратором с правами:\n"
                                           "- Удаление сообщений\n"
                                           "- Блокировка участников\n"
                                           "- Управление правами участников")
+            return
+            
+        if not (bot_member.can_restrict_members and bot_member.can_delete_messages):
+            missing_rights = []
+            if not bot_member.can_restrict_members:
+                missing_rights.append("- Управление правами участников")
+            if not bot_member.can_delete_messages:
+                missing_rights.append("- Удаление сообщений")
+                
+            await update.message.reply_text("❌ Ошибка: У меня недостаточно прав администратора.\n"
+                                          "Необходимые права:\n" + "\n".join(missing_rights))
             return
 
         # Пробуем установить разрешения
