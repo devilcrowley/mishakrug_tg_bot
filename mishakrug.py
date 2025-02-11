@@ -13,7 +13,7 @@ from telegram.ext import (
     filters,
     JobQueue
 )
-from telegram.error import TelegramError
+from telegram.error import TelegramError, BadRequest
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -53,13 +53,41 @@ async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
     
     try:
-        await context.bot.set_chat_permissions(chat_id, permissions)
-        await update.message.reply_text("Я включаю Михаила Круга")
-        await update.message.delete()
-    except Exception as e:
-        error_msg = await update.message.reply_text(f"Ошибка при запуске концерта: {str(e)}")
-        await error_msg.delete()
-        await update.message.delete()
+        # Проверяем права бота в чате
+        bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+        if not bot_member.can_restrict_members:
+            await update.message.reply_text("❌ Ошибка: У меня нет прав администратора в этом чате.\n"
+                                          "Пожалуйста, назначьте меня администратором с правами:\n"
+                                          "- Удаление сообщений\n"
+                                          "- Блокировка участников\n"
+                                          "- Управление правами участников")
+            return
+
+        # Пробуем установить разрешения
+        try:
+            await context.bot.set_chat_permissions(chat_id, permissions)
+            msg = await update.message.reply_text("Я включаю Михаила Круга")
+            
+            # Пробуем удалить командное сообщение
+            try:
+                await update.message.delete()
+            except BadRequest as e:
+                if "Message can't be deleted" in str(e):
+                    await msg.edit_text(msg.text + "\n\n⚠️ Не удалось удалить команду: нет прав на удаление сообщений")
+                else:
+                    raise e
+                    
+        except BadRequest as e:
+            if "Not enough rights" in str(e):
+                await update.message.reply_text("❌ Ошибка: Не удалось изменить права участников.\n"
+                                              "Убедитесь, что у меня есть права:\n"
+                                              "- Управление правами участников")
+            else:
+                await update.message.reply_text(f"❌ Ошибка при запуске концерта: {str(e)}")
+                
+    except TelegramError as e:
+        await update.message.reply_text(f"❌ Произошла ошибка Telegram: {str(e)}\n"
+                                      "Пожалуйста, проверьте права бота и попробуйте снова.")
 
 async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Остановка концерта вручную (только для администратора)"""
@@ -87,13 +115,41 @@ async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
     
     try:
-        await context.bot.set_chat_permissions(chat_id, permissions)
-        await update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
-        await update.message.delete()
-    except Exception as e:
-        error_msg = await update.message.reply_text(f"Ошибка при остановке концерта: {str(e)}")
-        await error_msg.delete()
-        await update.message.delete()
+        # Проверяем права бота в чате
+        bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+        if not bot_member.can_restrict_members:
+            await update.message.reply_text("❌ Ошибка: У меня нет прав администратора в этом чате.\n"
+                                          "Пожалуйста, назначьте меня администратором с правами:\n"
+                                          "- Удаление сообщений\n"
+                                          "- Блокировка участников\n"
+                                          "- Управление правами участников")
+            return
+
+        # Пробуем установить разрешения
+        try:
+            await context.bot.set_chat_permissions(chat_id, permissions)
+            msg = await update.message.reply_text("Концерт Михаила Круга окончен, мемасы снова доступны")
+            
+            # Пробуем удалить командное сообщение
+            try:
+                await update.message.delete()
+            except BadRequest as e:
+                if "Message can't be deleted" in str(e):
+                    await msg.edit_text(msg.text + "\n\n⚠️ Не удалось удалить команду: нет прав на удаление сообщений")
+                else:
+                    raise e
+                    
+        except BadRequest as e:
+            if "Not enough rights" in str(e):
+                await update.message.reply_text("❌ Ошибка: Не удалось изменить права участников.\n"
+                                              "Убедитесь, что у меня есть права:\n"
+                                              "- Управление правами участников")
+            else:
+                await update.message.reply_text(f"❌ Ошибка при остановке концерта: {str(e)}")
+                
+    except TelegramError as e:
+        await update.message.reply_text(f"❌ Произошла ошибка Telegram: {str(e)}\n"
+                                      "Пожалуйста, проверьте права бота и попробуйте снова.")
 
 async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Проверка расписания для автоматического запуска/остановки концерта"""
