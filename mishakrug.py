@@ -226,8 +226,8 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
         
         for chat_id in managed_chats:
             try:
-                # Запуск концерта по понедельникам в 8:00
-                if now.weekday() == 0 and now.hour == 8 and now.minute == 0:
+                # Запуск концерта по понедельникам в 8:00-8:05
+                if now.weekday() == 0 and now.hour == 8 and 0 <= now.minute <= 5:
                     # Удаляем лог-файл перед запуском концерта
                     log_file = Path(os.path.dirname(os.path.abspath(__file__))) / 'mishakrug.log'
                     if log_file.exists():
@@ -257,8 +257,8 @@ async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
                     print(f"[{now}] Запущен концерт в чате {chat_id}")
                     await msg.delete()
                     
-                # Остановка концерта каждый день в 23:59
-                elif now.hour == 23 and now.minute == 59:
+                # Остановка концерта в понедельник в 23:55-23:59
+                elif now.weekday() == 0 and now.hour == 23 and 55 <= now.minute <= 59:
                     # Восстанавливаем все права
                     permissions = ChatPermissions(
                         can_send_messages=True,
