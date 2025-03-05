@@ -10,6 +10,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug secrets
+        run: |
+          if [ -z "${{ secrets.SERVER_HOST }}" ]; then
+            echo "Error: SERVER_HOST is not set"
+            exit 1
+          fi
+          echo "SERVER_HOST is configured"
+
       - name: Deploy to server
         uses: appleboy/ssh-action@master
         with:
@@ -19,7 +27,7 @@ jobs:
           port: 22
           timeout: 30s
           command_timeout: 30m
-          script_stop: true
+          debug: true
           script: |
             cd /opt/mishakrug_tg_bot
             sleep 5
