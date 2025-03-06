@@ -36,6 +36,8 @@ jobs:
             if pgrep -f "python3 mishakrug.py"; then
               pkill -f "python3 mishakrug.py" || true
               sleep 5
+            else
+              echo "No running process found."
             fi
             sleep 5
             echo "Updating repository..."
