@@ -30,21 +30,31 @@ jobs:
           debug: true
           script: |
             echo "Setup deployment directory..."
-            cd /opt/mishakrug_tg_bot
+            cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
             sleep 5
+
             echo "Stopping existing process..."
             if pgrep -f "python3 mishakrug.py"; then
+              echo "Stopping process..."
               sudo pkill -f "python3 mishakrug.py" || true
-              sleep 5
+            sleep 5
+            # Проверяем, завершился ли процесс
+            if pgrep -f "python3 mishakrug.py"; then
+              echo "Process is still running. Force killing..."
+              sudo pkill -9 -f "python3 mishakrug.py" || true
+            fi
             else
               echo "No running process found."
             fi
             sleep 5
+
             echo "Updating repository..."
-            git pull origin main
+            git pull origin main || { echo "Failed to update repository"; exit 1; }
             sleep 5
+
             echo "Starting new process..."
-            source venv/bin/activate
+            source venv/bin/activate || { echo "Failed to activate virtual environment"; exit 1; }
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
             sleep 5
+
             echo "Deployment complete."
