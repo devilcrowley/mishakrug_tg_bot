@@ -34,7 +34,7 @@ jobs:
             sleep 5
             echo "Stopping existing process..."
             if pgrep -f "python3 mishakrug.py"; then
-              pkill -f "python3 mishakrug.py" || true
+              sudo pkill -f "python3 mishakrug.py" || true
               sleep 5
             else
               echo "No running process found."
