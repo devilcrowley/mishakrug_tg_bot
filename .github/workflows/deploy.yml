@@ -29,11 +29,20 @@ jobs:
           command_timeout: 30m
           debug: true
           script: |
+            echo "Setup deployment directory..."
             cd /opt/mishakrug_tg_bot
             sleep 5
+            echo "Stopping existing process..."
+            if pgrep -f "python3 mishakrug.py"; then
+              pkill -f "python3 mishakrug.py"
+              sleep 5
+            fi
+            sleep 5
+            echo "Updating repository..."
             git pull origin main
             sleep 5
-            pkill -f "python3 mishakrug.py" || true
-            sleep 5
+            echo "Starting new process..."
             source venv/bin/activate
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
+            sleep 5
+            echo "Deployment complete."
