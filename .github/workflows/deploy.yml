@@ -34,29 +34,54 @@ jobs:
             cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
             sleep 5
 
-            echo "Stopping existing process..."
+            # Улучшенная остановка процессов
+            stop_process() {
+            echo "Поиск процессов..."
+            # Точное совпадение имени процесса
+            pids=$(pgrep -f "python3 mishakrug.py" || true)
+            
+            if [ -n "$pids" ]; then
+              echo "Найдены процессы: $pids"
+              echo "Отправка SIGTERM..."
+              kill $pids || true
+              
+              # Ожидание завершения с таймаутом
+              timeout=10
+              while [ $timeout -gt 0 ]; do
+                if ! pgrep -f "python3 mishakrug.py" >/dev/null; then
+                  break
+                fi
+                sleep 1
+                ((timeout--))
+              done
+              
+              if [ $timeout -eq 0 ]; then
+                echo "Принудительное завершение..."
+                kill -9 $pids || true
+                sleep 3
+              fi
+            fi
+            
+            # Финальная проверка
             if pgrep -f "python3 mishakrug.py"; then
-              echo "Stopping process..."
-              pkill -f "python3 mishakrug.py" > /dev/null 2>&1 || true
-              sleep 5
-              # Проверяем, завершился ли процесс
-              if pgrep -f "python3 mishakrug.py"; then
-              echo "Process is still running. Force killing..."
-              pkill -9 -f "python3 mishakrug.py" > /dev/null 2>&1 || true
-              sleep 5
+              echo "ОШИБКА: Процессы остались!"
+              exit 1
             fi
-            else
-              echo "No running process found."
-            fi
-            sleep 5
-
-            echo "Updating repository..."
-            git pull origin main || { echo "Failed to update repository"; exit 1; }
-            sleep 5
-
-            echo "Starting new process..."
-            source venv/bin/activate || { echo "Failed to activate virtual environment"; exit 1; }
+            }
+          
+            # Вызов функции остановки
+            stop_process
+          
+            # Обновление и запуск
+            git pull origin main
+            source venv/bin/activate
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
-            sleep 5
-
-            echo "Deployment complete."
+          
+            # Проверка запуска
+            sleep 3
+            if ! pgrep -f "python3 mishakrug.py" >/dev/null; then
+              echo "ОШИБКА: Процесс не запустился!"
+            exit 1
+            fi
+          
+            echo "Деплой успешно завершён!"
