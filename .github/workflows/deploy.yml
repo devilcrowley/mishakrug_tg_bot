@@ -29,6 +29,7 @@ jobs:
           command_timeout: 30m
           debug: true
           script: |
+            set -x
             echo "Setup deployment directory..."
             cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
             sleep 5
