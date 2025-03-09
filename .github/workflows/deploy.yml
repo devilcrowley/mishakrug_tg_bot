@@ -36,12 +36,13 @@ jobs:
             echo "Stopping existing process..."
             if pgrep -f "python3 mishakrug.py"; then
               echo "Stopping process..."
-              sudo pkill -f "python3 mishakrug.py" > /dev/null 2>&1 || true
-            sleep 5
-            # Проверяем, завершился ли процесс
-            if pgrep -f "python3 mishakrug.py"; then
+              pkill -f "python3 mishakrug.py" > /dev/null 2>&1 || true
+              sleep 5
+              # Проверяем, завершился ли процесс
+              if pgrep -f "python3 mishakrug.py"; then
               echo "Process is still running. Force killing..."
-              sudo pkill -9 -f "python3 mishakrug.py" > /dev/null 2>&1 || true
+              pkill -9 -f "python3 mishakrug.py" > /dev/null 2>&1 || true
+              sleep 5
             fi
             else
               echo "No running process found."
