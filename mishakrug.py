@@ -424,14 +424,14 @@ def main() -> None:
             # Запуск концерта по понедельникам в 8:00 МСК
             job_queue.run_daily(
                 start_concert_job,
-                days=(0,),  # Понедельник
+                days=(2,),  # Понедельник
                 time=time(hour=8, minute=0, tzinfo=moscow_tz)
             )
             
             # Остановка концерта каждый день в 23:59 МСК
             job_queue.run_daily(
                 stop_concert_job,
-                days=(0,),  # Понедельник
+                days=(2,),  # Понедельник
                 time=time(hour=23, minute=59, tzinfo=moscow_tz)
             )
             
