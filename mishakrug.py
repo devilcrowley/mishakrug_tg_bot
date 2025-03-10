@@ -200,113 +200,147 @@ async def stop_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(f"❌ Произошла ошибка Telegram: {str(e)}\n"
                                       "Пожалуйста, проверьте права бота и попробуйте снова.")
 
-async def check_schedule(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Проверка расписания для автоматического запуска/остановки концерта"""
+async def start_concert_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запуск концерта по расписанию (понедельник 8:00 МСК)"""
+    now = datetime.now(moscow_tz)
+    logger = logging.getLogger(__name__)
+    logger.info(f"[{now}] Запуск планового концерта")
+    
     try:
-        now = datetime.now(moscow_tz)
+        # Получаем список активных чатов
+        managed_chats = await get_managed_chats(context)
+        logger.info(f"[{now}] Активные чаты для запуска концерта: {managed_chats}")
         
-        if MODE == 'secured':
-            # В secured режиме работаем только с зарегистрированными чатами
-            managed_chats = context.bot_data.get('managed_chats', set())
-            if not managed_chats:
-                return  # Нет зарегистрированных чатов
-            print(f"[{now}] Проверка расписания. Зарегистрированные чаты: {managed_chats}")
-        else:
-            # В public режиме получаем список всех чатов, где бот является администратором
-            managed_chats = set()
-            if 'all_chats' in context.bot_data:
-                for chat_id in context.bot_data['all_chats']:
-                    try:
-                        bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
-                        if isinstance(bot_member, ChatMemberAdministrator) and bot_member.can_restrict_members:
-                            managed_chats.add(chat_id)
-                    except TelegramError:
-                        continue
-            print(f"[{now}] Проверка расписания. Активные чаты: {managed_chats}")
-        
+        if not managed_chats:
+            logger.warning(f"[{now}] Нет активных чатов для запуска концерта")
+            return
+            
         for chat_id in managed_chats:
             try:
-                # Запуск концерта по понедельникам в 8:00-8:05
-                if now.weekday() == 0 and now.hour == 8 and 0 <= now.minute <= 5:
-                    # Удаляем лог-файл перед запуском концерта
-                    log_file = Path(os.path.dirname(os.path.abspath(__file__))) / 'mishakrug.log'
-                    if log_file.exists():
-                        try:
-                            log_file.unlink()
-                            print(f"[{now}] Лог-файл успешно удален")
-                        except Exception as log_error:
-                            print(f"[{now}] Ошибка при удалении лог-файла: {log_error}")
-                    # Разрешаем только видеокружочки
-                    permissions = ChatPermissions(
-                        can_send_messages=False, 
-                        can_send_other_messages=False,
-                        can_add_web_page_previews=False,
-                        can_send_polls=False,
-                        can_change_info=False,
-                        can_invite_users=True,
-                        can_pin_messages=False,
-                        can_send_photos=False,
-                        can_send_videos=False, 
-                        can_send_audios=False,
-                        can_send_documents=False,
-                        can_send_video_notes=True,  # Разрешаем только видеокружочки
-                        can_send_voice_notes=False
-                    )
-                    await context.bot.set_chat_permissions(chat_id, permissions)
-                    msg = await context.bot.send_message(chat_id, "Я включаю Михаила Круга")
-                    print(f"[{now}] Запущен концерт в чате {chat_id}")
-                    await msg.delete()
-                    
-                # Остановка концерта в понедельник в 23:55-23:59
-                elif now.weekday() == 0 and now.hour == 23 and 55 <= now.minute <= 59:
-                    # Восстанавливаем все права
-                    permissions = ChatPermissions(
-                        can_send_messages=True,
-                        can_send_media_messages=True,
-                        can_send_other_messages=True,
-                        can_add_web_page_previews=True,
-                        can_send_polls=True,
-                        can_change_info=False,
-                        can_invite_users=True,
-                        can_pin_messages=False,
-                        can_send_photos=True,
-                        can_send_videos=True,
-                        can_send_audios=True,
-                        can_send_documents=True,
-                        can_send_video_notes=True,
-                        can_send_voice_notes=True
-                    )
-                    await context.bot.set_chat_permissions(chat_id, permissions)
-                    msg = await context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
-                    print(f"[{now}] Остановлен концерт в чате {chat_id}")
-                    await msg.delete()
-                    
-            except Exception as chat_error:
-                print(f"[{now}] Ошибка при обработке чата {chat_id}: {chat_error}")
-                # Отправляем сообщение об ошибке администратору
-                # Отправляем сообщение об ошибке всем администраторам
-                for admin_id in ADMIN_CHAT_IDS:
+                # Проверяем права бота перед запуском
+                bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+                if not (isinstance(bot_member, ChatMemberAdministrator) and bot_member.can_restrict_members):
+                    logger.error(f"[{now}] Недостаточно прав для запуска концерта в чате {chat_id}")
+                    continue
+                
+                # Удаляем лог-файл перед запуском концерта
+                log_file = Path(os.path.dirname(os.path.abspath(__file__))) / 'mishakrug.log'
+                if log_file.exists():
                     try:
-                        error_msg = await context.bot.send_message(
-                            admin_id,
-                            f"Ошибка при обработке чата {chat_id}:\n{str(chat_error)}"
-                        )
-                        await error_msg.delete()
-                    except Exception as admin_msg_error:
-                        print(f"[{now}] Не удалось отправить сообщение администратору {admin_id}: {admin_msg_error}")
-                    
-    except Exception as e:
-        print(f"[{now}] Глобальная ошибка в check_schedule: {e}")
-        # Отправляем сообщение об ошибке всем администраторам
-        for admin_id in ADMIN_CHAT_IDS:
-            try:
-                error_msg = await context.bot.send_message(
-                    admin_id,
-                    f"Глобальная ошибка в check_schedule:\n{str(e)}"
+                        log_file.unlink()
+                        logger.info(f"[{now}] Лог-файл успешно удален")
+                    except Exception as log_error:
+                        logger.error(f"[{now}] Ошибка при удалении лог-файла: {log_error}")
+                
+                # Разрешаем только видеокружочки
+                permissions = ChatPermissions(
+                    can_send_messages=False, 
+                    can_send_other_messages=False,
+                    can_add_web_page_previews=False,
+                    can_send_polls=False,
+                    can_change_info=False,
+                    can_invite_users=True,
+                    can_pin_messages=False,
+                    can_send_photos=False,
+                    can_send_videos=False, 
+                    can_send_audios=False,
+                    can_send_documents=False,
+                    can_send_video_notes=True,  # Разрешаем только видеокружочки
+                    can_send_voice_notes=False
                 )
-                await error_msg.delete()
-            except Exception as admin_msg_error:
-                print(f"[{now}] Не удалось отправить сообщение администратору {admin_id}: {admin_msg_error}")
+                
+                await context.bot.set_chat_permissions(chat_id, permissions)
+                msg = await context.bot.send_message(chat_id, "Я включаю Михаила Круга")
+                logger.info(f"[{now}] Запущен концерт в чате {chat_id}")
+                await msg.delete()
+                
+            except Exception as chat_error:
+                logger.error(f"[{now}] Ошибка при запуске концерта в чате {chat_id}: {chat_error}")
+                notify_admins(context, f"Ошибка при запуске концерта в чате {chat_id}:\n{str(chat_error)}")
+                
+    except Exception as e:
+        logger.error(f"[{now}] Глобальная ошибка при запуске концерта: {e}")
+        notify_admins(context, f"Глобальная ошибка при запуске концерта:\n{str(e)}")
+
+async def stop_concert_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Остановка концерта по расписанию (23:59 МСК)"""
+    now = datetime.now(moscow_tz)
+    logger = logging.getLogger(__name__)
+    logger.info(f"[{now}] Остановка планового концерта")
+    
+    try:
+        # Получаем список активных чатов
+        managed_chats = await get_managed_chats(context)
+        logger.info(f"[{now}] Активные чаты для остановки концерта: {managed_chats}")
+        
+        if not managed_chats:
+            logger.warning(f"[{now}] Нет активных чатов для остановки концерта")
+            return
+            
+        for chat_id in managed_chats:
+            try:
+                # Проверяем права бота перед остановкой
+                bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+                if not (isinstance(bot_member, ChatMemberAdministrator) and bot_member.can_restrict_members):
+                    logger.error(f"[{now}] Недостаточно прав для остановки концерта в чате {chat_id}")
+                    continue
+                
+                # Восстанавливаем все права
+                permissions = ChatPermissions(
+                    can_send_messages=True,
+                    can_send_media_messages=True,
+                    can_send_other_messages=True,
+                    can_add_web_page_previews=True,
+                    can_send_polls=True,
+                    can_change_info=False,
+                    can_invite_users=True,
+                    can_pin_messages=False,
+                    can_send_photos=True,
+                    can_send_videos=True,
+                    can_send_audios=True,
+                    can_send_documents=True,
+                    can_send_video_notes=True,
+                    can_send_voice_notes=True
+                )
+                
+                await context.bot.set_chat_permissions(chat_id, permissions)
+                msg = await context.bot.send_message(chat_id, "Концерт Михаила Круга окончен, мемасы снова доступны")
+                logger.info(f"[{now}] Остановлен концерт в чате {chat_id}")
+                await msg.delete()
+                
+            except Exception as chat_error:
+                logger.error(f"[{now}] Ошибка при остановке концерта в чате {chat_id}: {chat_error}")
+                notify_admins(context, f"Ошибка при остановке концерта в чате {chat_id}:\n{str(chat_error)}")
+                
+    except Exception as e:
+        logger.error(f"[{now}] Глобальная ошибка при остановке концерта: {e}")
+        notify_admins(context, f"Глобальная ошибка при остановке концерта:\n{str(e)}")
+
+async def get_managed_chats(context: ContextTypes.DEFAULT_TYPE) -> set:
+    """Получение списка активных чатов в зависимости от режима работы"""
+    if MODE == 'secured':
+        # В secured режиме работаем только с зарегистрированными чатами
+        return context.bot_data.get('managed_chats', set())
+    else:
+        # В public режиме получаем список всех чатов, где бот является администратором
+        managed_chats = set()
+        if 'all_chats' in context.bot_data:
+            for chat_id in context.bot_data['all_chats']:
+                try:
+                    bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+                    if isinstance(bot_member, ChatMemberAdministrator) and bot_member.can_restrict_members:
+                        managed_chats.add(chat_id)
+                except TelegramError:
+                    continue
+        return managed_chats
+
+def notify_admins(context: ContextTypes.DEFAULT_TYPE, message: str) -> None:
+    """Отправка уведомления администраторам"""
+    for admin_id in ADMIN_CHAT_IDS:
+        try:
+            context.bot.send_message(admin_id, message)
+        except Exception as e:
+            logging.error(f"Не удалось отправить сообщение администратору {admin_id}: {e}")
 
 async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Регистрация чата для управления концертами (только в secured режиме)"""
@@ -384,15 +418,28 @@ def main() -> None:
             # Отслеживаем добавление бота в новые чаты
             application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, track_chat))
 
-        # Настройка планировщика задач для проверки каждую минуту
+        # Настройка планировщика задач с использованием cron
         job_queue = application.job_queue
         if job_queue:
-            job_queue.run_repeating(
-                check_schedule,
-                interval=60,
-                first=1  # Начать первую проверку через 1 секунду после запуска
+            # Запуск концерта по понедельникам в 8:00 МСК
+            job_queue.run_daily(
+                start_concert_job,
+                days=(0,),  # Понедельник
+                time=time(hour=8, minute=0, tzinfo=moscow_tz)
             )
+            
+            # Остановка концерта каждый день в 23:59 МСК
+            job_queue.run_daily(
+                stop_concert_job,
+                days=(0,),  # Понедельник
+                time=time(hour=23, minute=59, tzinfo=moscow_tz)
+            )
+            
             logger.info("Планировщик задач успешно настроен")
+            logger.info(f"Часовой пояс: {moscow_tz}")
+            logger.info("Расписание:")
+            logger.info("- Запуск концерта: каждый понедельник в 8:00 МСК")
+            logger.info("- Остановка концерта: каждый день в 23:59 МСК")
         else:
             logger.error("Не удалось инициализировать планировщик задач!")
             return
