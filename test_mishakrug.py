@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, time
 import pytz
 from unittest.mock import AsyncMock, MagicMock, patch
-from mishakrug import start_concert_job, moscow_tz
+from mishakrug import start_concert_job, moscow_tz, get_managed_chats
 from telegram import ChatMemberAdministrator
 
 @pytest.mark.asyncio
@@ -35,8 +35,13 @@ async def test_start_concert_on_monday_8am():
     # В режиме public мы используем managed_chats, который формируется из all_chats после проверки прав
     mock_context.bot_data = {'managed_chats': {123456}}  # Тестовый чат ID
     
-    # Запускаем тест с подмененным datetime.now()
-    with patch('mishakrug.datetime') as mock_datetime:
+    # Создаем асинхронный мок для get_managed_chats
+    async def mock_get_managed_chats(context):
+        return {123456}
+
+    # Запускаем тест с подмененными datetime.now() и get_managed_chats()
+    with patch('mishakrug.datetime') as mock_datetime, \
+         patch('mishakrug.get_managed_chats', side_effect=mock_get_managed_chats):
         mock_datetime.now = lambda tz=None: test_datetime  # Мокаем метод now() с поддержкой часового пояса
         
         # Вызываем тестируемую функцию
