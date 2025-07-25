@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  zabbix-server:
+    image: zabbix/zabbix-server-mysql:latest
+    container_name: telegram-bot-zabbix-server
+    ports:
+      - "10051:10051"
+    environment:
+      - DB_SERVER_HOST=mysql-server
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=zabbix_password
+      - MYSQL_ROOT_PASSWORD=root_password
+    volumes:
+      - zabbix_server_data:/var/lib/zabbix
+    depends_on:
+      - mysql-server
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-mysql:latest
+    container_name: telegram-bot-zabbix-web
+    ports:
+      - "8081:8080"
+    environment:
+      - ZBX_SERVER_HOST=zabbix-server
+      - DB_SERVER_HOST=mysql-server
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=zabbix_password
+      - PHP_TZ=Europe/Moscow
+    depends_on:
+      - zabbix-server
+      - mysql-server
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  mysql-server:
+    image: mysql:8.0
+    container_name: telegram-bot-mysql
+    environment:
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=zabbix_password
+      - MYSQL_ROOT_PASSWORD=root_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command:
+      - mysqld
+      - --character-set-server=utf8
+      - --collation-server=utf8_bin
+      - --default-authentication-plugin=mysql_native_password
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent:latest
+    container_name: telegram-bot-zabbix-agent
+    environment:
+      - ZBX_HOSTNAME=telegram-bot-host
+      - ZBX_SERVER_HOST=zabbix-server
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+volumes:
+  zabbix_server_data:
+  mysql_data:
+
+networks:
+  monitoring:
+    driver: bridge

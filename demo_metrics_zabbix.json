@@ -1,0 +1,11 @@
+{
+  "telegram.api.calls.total": 100,
+  "telegram.api.errors.total": 26,
+  "telegram.api.success.rate": 74.0,
+  "telegram.api.error.rate": 26.0,
+  "telegram.api.4xx.errors": 15,
+  "telegram.api.5xx.errors": 7,
+  "telegram.api.network.errors": 7,
+  "telegram.api.timeout.errors": 4,
+  "telegram.api.rate_limit.errors": 0
+}

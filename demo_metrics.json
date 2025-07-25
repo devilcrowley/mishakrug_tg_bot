@@ -1,0 +1,32 @@
+{
+  "period_hours": 24,
+  "total_calls": 100,
+  "total_errors": 26,
+  "success_rate": 74.0,
+  "error_rate": 26.0,
+  "errors_by_type": {
+    "BadRequest": 12,
+    "Forbidden": 3,
+    "NetworkError": 7,
+    "TimedOut": 4
+  },
+  "errors_by_method": {
+    "send_message": 4,
+    "edit_message_text": 5,
+    "delete_message": 6,
+    "get_chat_member": 7,
+    "set_chat_permissions": 4
+  },
+  "errors_by_code": {
+    "400": 7,
+    "429": 5,
+    "403": 3,
+    "500": 4,
+    "502": 3
+  },
+  "http_4xx_count": 15,
+  "http_5xx_count": 7,
+  "network_errors": 7,
+  "timeout_errors": 4,
+  "rate_limit_errors": 0
+}

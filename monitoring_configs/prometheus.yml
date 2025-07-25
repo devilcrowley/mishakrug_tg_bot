@@ -1,0 +1,26 @@
+# Конфигурация Prometheus для мониторинга Telegram бота
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "telegram_bot_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Мониторинг Telegram бота
+  - job_name: 'telegram-bot'
+    static_configs:
+      - targets: ['localhost:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    
+  # Мониторинг самого Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
