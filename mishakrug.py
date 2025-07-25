@@ -1,5 +1,6 @@
 import os
 import pytz
+import asyncio
 from datetime import datetime, time
 from dotenv import load_dotenv
 import logging
@@ -14,6 +15,10 @@ from telegram.ext import (
     JobQueue
 )
 from telegram.error import TelegramError, BadRequest
+
+# Импорт модулей мониторинга
+from monitoring import api_monitor, monitor_async_api_call
+from metrics_server import start_metrics_server
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -31,9 +36,12 @@ moscow_tz = pytz.timezone('Europe/Moscow')
 async def is_user_admin(chat_id: int, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Проверка, является ли пользователь администратором чата"""
     try:
-        chat_member = await context.bot.get_chat_member(chat_id, user_id)
+        chat_member = await monitor_async_api_call(
+            context.bot.get_chat_member, chat_id, user_id
+        )
         return isinstance(chat_member, ChatMemberAdministrator) or chat_member.status == 'creator'
-    except TelegramError:
+    except TelegramError as e:
+        api_monitor.record_error(e, 'get_chat_member', chat_id, user_id)
         return False
 
 async def start_concert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
