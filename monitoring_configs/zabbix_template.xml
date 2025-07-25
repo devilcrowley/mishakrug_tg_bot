@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.4</version>
+    <date>2024-01-01T00:00:00Z</date>
+    <groups>
+        <group>
+            <uuid>telegram-bot-monitoring</uuid>
+            <name>Telegram Bot</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <uuid>telegram-bot-template</uuid>
+            <template>Telegram Bot Monitoring</template>
+            <name>Telegram Bot Monitoring</name>
+            <groups>
+                <group>
+                    <name>Telegram Bot</name>
+                </group>
+            </groups>
+            <items>
+                <item>
+                    <uuid>item-api-calls-total</uuid>
+                    <name>API Calls Total</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.calls.total</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <query_fields>
+                        <query_field>
+                            <name>Content-Type</name>
+                            <value>application/json</value>
+                        </query_field>
+                    </query_fields>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.calls.total</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-api-errors-total</uuid>
+                    <name>API Errors Total</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.errors.total</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.errors.total</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-success-rate</uuid>
+                    <name>Success Rate</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.success.rate</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.success.rate</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-error-rate</uuid>
+                    <name>Error Rate</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.error.rate</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <units>%</units>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.error.rate</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-4xx-errors</uuid>
+                    <name>4xx Errors</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.4xx.errors</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.4xx.errors</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-5xx-errors</uuid>
+                    <name>5xx Errors</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.5xx.errors</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.5xx.errors</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-network-errors</uuid>
+                    <name>Network Errors</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.network.errors</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.network.errors</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-timeout-errors</uuid>
+                    <name>Timeout Errors</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.timeout.errors</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.timeout.errors</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+                <item>
+                    <uuid>item-rate-limit-errors</uuid>
+                    <name>Rate Limit Errors</name>
+                    <type>HTTP_AGENT</type>
+                    <key>telegram.api.rate_limit.errors</key>
+                    <delay>1m</delay>
+                    <value_type>FLOAT</value_type>
+                    <url>http://localhost:8080/metrics/zabbix</url>
+                    <preprocessing>
+                        <step>
+                            <type>JSONPATH</type>
+                            <parameters>
+                                <parameter>$.telegram.api.rate_limit.errors</parameter>
+                            </parameters>
+                        </step>
+                    </preprocessing>
+                </item>
+            </items>
+            <triggers>
+                <trigger>
+                    <uuid>trigger-high-error-rate</uuid>
+                    <expression>last(/Telegram Bot Monitoring/telegram.api.error.rate)&gt;20</expression>
+                    <name>High Error Rate</name>
+                    <priority>HIGH</priority>
+                    <description>Error rate is above 20%</description>
+                </trigger>
+                <trigger>
+                    <uuid>trigger-low-success-rate</uuid>
+                    <expression>last(/Telegram Bot Monitoring/telegram.api.success.rate)&lt;70</expression>
+                    <name>Low Success Rate</name>
+                    <priority>HIGH</priority>
+                    <description>Success rate is below 70%</description>
+                </trigger>
+                <trigger>
+                    <uuid>trigger-many-4xx-errors</uuid>
+                    <expression>last(/Telegram Bot Monitoring/telegram.api.4xx.errors)&gt;10</expression>
+                    <name>Many 4xx Errors</name>
+                    <priority>WARNING</priority>
+                    <description>Too many 4xx errors detected</description>
+                </trigger>
+                <trigger>
+                    <uuid>trigger-many-5xx-errors</uuid>
+                    <expression>last(/Telegram Bot Monitoring/telegram.api.5xx.errors)&gt;5</expression>
+                    <name>Many 5xx Errors</name>
+                    <priority>HIGH</priority>
+                    <description>Too many 5xx errors detected</description>
+                </trigger>
+                <trigger>
+                    <uuid>trigger-rate-limit</uuid>
+                    <expression>last(/Telegram Bot Monitoring/telegram.api.rate_limit.errors)&gt;3</expression>
+                    <name>Rate Limit Exceeded</name>
+                    <priority>WARNING</priority>
+                    <description>Rate limit errors detected</description>
+                </trigger>
+            </triggers>
+        </template>
+    </templates>
+</zabbix_export>

@@ -1,0 +1,59 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Telegram Bot Monitoring",
+    "tags": ["telegram", "bot", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Calls Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(telegram_api_calls_total[5m])",
+            "legendFormat": "Calls/sec"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "telegram_api_success_rate",
+            "legendFormat": "Success %"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Error Rate by Type",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "telegram_api_4xx_errors_total",
+            "legendFormat": "4xx Errors"
+          },
+          {
+            "expr": "telegram_api_5xx_errors_total",
+            "legendFormat": "5xx Errors"
+          },
+          {
+            "expr": "telegram_api_network_errors_total",
+            "legendFormat": "Network Errors"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

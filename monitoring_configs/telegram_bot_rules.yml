@@ -1,0 +1,83 @@
+# Правила алертов для Telegram бота
+groups:
+  - name: telegram_bot_alerts
+    rules:
+      # Высокий уровень ошибок 4xx
+      - alert: TelegramBot4xxErrorsHigh
+        expr: telegram_api_4xx_errors_total > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий уровень 4xx ошибок в Telegram API"
+          description: "Количество 4xx ошибок: {{ $value }} за последние 5 минут"
+
+      # Высокий уровень ошибок 5xx
+      - alert: TelegramBot5xxErrorsHigh
+        expr: telegram_api_5xx_errors_total > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Критический уровень 5xx ошибок в Telegram API"
+          description: "Количество 5xx ошибок: {{ $value }} за последние 2 минуты"
+
+      # Низкий success rate
+      - alert: TelegramBotLowSuccessRate
+        expr: telegram_api_success_rate < 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Низкий success rate Telegram API"
+          description: "Success rate: {{ $value }}% (ниже 90%)"
+
+      # Критически низкий success rate
+      - alert: TelegramBotCriticalSuccessRate
+        expr: telegram_api_success_rate < 70
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Критически низкий success rate Telegram API"
+          description: "Success rate: {{ $value }}% (ниже 70%)"
+
+      # Много rate limit ошибок
+      - alert: TelegramBotRateLimitHigh
+        expr: telegram_api_rate_limit_errors_total > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Превышение лимитов Telegram API"
+          description: "Rate limit ошибок: {{ $value }} за последнюю минуту"
+
+      # Много сетевых ошибок
+      - alert: TelegramBotNetworkErrorsHigh
+        expr: telegram_api_network_errors_total > 10
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий уровень сетевых ошибок"
+          description: "Сетевых ошибок: {{ $value }} за последние 3 минуты"
+
+      # Много таймаутов
+      - alert: TelegramBotTimeoutsHigh
+        expr: telegram_api_timeout_errors_total > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий уровень таймаутов"
+          description: "Таймаутов: {{ $value }} за последние 2 минуты"
+
+      # Высокий error rate
+      - alert: TelegramBotHighErrorRate
+        expr: telegram_api_error_rate > 20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Высокий уровень ошибок Telegram API"
+          description: "Error rate: {{ $value }}% (выше 20%)"
