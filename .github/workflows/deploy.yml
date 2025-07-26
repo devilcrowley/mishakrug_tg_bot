@@ -88,14 +88,43 @@ jobs:
             fi
           
             # Обновление и запуск
+            # Проверка и исправление прав доступа
+            echo "Проверка и исправление прав доступа..."
+            # Пробуем использовать sudo, если доступно
+            if command -v sudo &> /dev/null && sudo -n true 2>/dev/null; then
+              sudo chown -R mishadeploy:mishadeploy /opt/mishakrug_tg_bot
+            else
+              # Если sudo недоступно, пробуем другой подход - клонирование в временную директорию
+              echo "Sudo недоступно, используем альтернативный подход..."
+              
+              # Создаем временную директорию для клонирования
+              TEMP_DIR="/tmp/mishakrug_temp_$(date +%s)"
+              mkdir -p "$TEMP_DIR"
+              
+              # Клонируем репозиторий во временную директорию
+              git clone https://github.com/devilcrowley/mishakrug_tg_bot.git "$TEMP_DIR"
+              
+              # Копируем все файлы, кроме .git и .env
+              cp -r "$TEMP_DIR"/* /opt/mishakrug_tg_bot/
+              
+              # Очищаем временную директорию
+              rm -rf "$TEMP_DIR"
+            fi
+            
             # Настройка Git для безопасной работы с директорией
             git config --global --add safe.directory /opt/mishakrug_tg_bot
             
-            git fetch origin
-            sleep 10
-            git reset --hard origin/main
-            git clean -fd
-            # git pull origin main
+            # Проверяем, можем ли мы использовать Git в директории
+            if [ -d "/opt/mishakrug_tg_bot/.git" ] && git status &>/dev/null; then
+              echo "Используем Git для обновления..."
+              git fetch origin
+              sleep 10
+              git reset --hard origin/main
+              git clean -fd
+            else
+              echo "Git операции пропущены, файлы уже обновлены через копирование..."
+            fi
+            
             source venv/bin/activate
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
           
