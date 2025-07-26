@@ -124,7 +124,6 @@ jobs:
             else
               echo "Git операции пропущены, файлы уже обновлены через копирование..."
             fi
-            
             source venv/bin/activate
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
           
