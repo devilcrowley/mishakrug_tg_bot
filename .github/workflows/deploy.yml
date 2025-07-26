@@ -27,50 +27,65 @@ jobs:
           port: 22
           timeout: 30s
           command_timeout: 30m
-          # debug: true
           script: |
-            # debug_mode set -x
             echo "Setup deployment directory..."
             cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
             sleep 5
 
             # Улучшенная остановка процессов
             stop_process() {
-            echo "Поиск процессов..."
-            # Точное совпадение имени процесса
-            pids=$(ps aux | grep "python3 mishakrug.py" | grep -v grep || true)
-            
-            if [ -n "$pids" ]; then
-              echo "Найдены процессы: $pids"
-              echo "Отправка SIGTERM..."
-              kill $pids || true
+              echo "Поиск процессов..."
+              # Точное совпадение имени процесса
+              pids=$(ps aux | grep "python3 mishakrug.py" | grep -v grep | awk '{print $2}' || true)
               
-              # Ожидание завершения с таймаутом
-              timeout=10
-              while [ $timeout -gt 0 ]; do
-                if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
-                  break
+              if [ -n "$pids" ]; then
+                echo "Найдены процессы: $pids"
+                echo "Отправка SIGTERM..."
+                kill $pids || true
+                
+                # Ожидание завершения с таймаутом
+                timeout=10
+                while [ $timeout -gt 0 ]; do
+                  if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
+                    break
+                  fi
+                  sleep 1
+                  ((timeout--))
+                done
+                
+                if [ $timeout -eq 0 ]; then
+                  echo "Принудительное завершение..."
+                  kill -9 $pids || true
+                  sleep 3
                 fi
-                sleep 1
-                ((timeout--))
-              done
-              
-              if [ $timeout -eq 0 ]; then
-                echo "Принудительное завершение..."
-                kill -9 $pids || true
-                sleep 3
               fi
-            fi
-            
-            # Финальная проверка
-            if ps aux | grep "python3 mishakrug.py" | grep -v grep; then
-              echo "ОШИБКА: Процессы остались!"
-              exit 1
-            fi
+              
+              # Финальная проверка
+              if ps aux | grep "python3 mishakrug.py" | grep -v grep; then
+                echo "ОШИБКА: Процессы остались!"
+                exit 1
+              fi
             }
           
             # Вызов функции остановки
             stop_process
+
+            # Сохраняем .env во временный файл
+            if [ -f .env ]; then
+              echo "Сохраняем .env файл..."
+              cp .env /tmp/mishakrug_env_backup
+            fi
+
+            # Очищаем папку (кроме .git и venv)
+            echo "Очищаем папку..."
+            shopt -s extglob
+            rm -rf !(.git|venv|.env)
+
+            # Восстанавливаем .env
+            if [ -f /tmp/mishakrug_env_backup ]; then
+              echo "Восстанавливаем .env файл..."
+              mv /tmp/mishakrug_env_backup .env
+            fi
           
             # Обновление и запуск
             git pull origin main
@@ -81,7 +96,7 @@ jobs:
             sleep 3
             if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
               echo "ОШИБКА: Процесс не запустился!"
-            exit 1
+              exit 1
             fi
           
             echo "Деплой успешно завершён!"
