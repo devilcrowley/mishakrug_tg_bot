@@ -28,75 +28,64 @@ jobs:
           timeout: 30s
           command_timeout: 30m
           script: |
-            echo "Setup deployment directory..."
-            cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
-            sleep 5
+            echo "Переход в рабочую директорию..."
+            cd /opt/mishakrug_tg_bot || { echo "Ошибка: Не удалось перейти в /opt/mishakrug_tg_bot"; exit 1; }
 
-            # Улучшенная остановка процессов
+            # 1. Остановка текущего процесса (если запущен)
             stop_process() {
-              echo "Поиск процессов..."
-              # Точное совпадение имени процесса
-              pids=$(ps aux | grep "python3 mishakrug.py" | grep -v grep | awk '{print $2}' || true)
+              echo "Поиск запущенных процессов..."
+              pids=$(pgrep -f "python3 mishakrug.py" || true)
               
               if [ -n "$pids" ]; then
                 echo "Найдены процессы: $pids"
-                echo "Отправка SIGTERM..."
+                echo "Остановка..."
                 kill $pids || true
                 
-                # Ожидание завершения с таймаутом
+                # Ожидание завершения (10 сек)
                 timeout=10
-                while [ $timeout -gt 0 ]; do
-                  if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
-                    break
-                  fi
+                while kill -0 $pids 2>/dev/null && [ $timeout -gt 0 ]; do
                   sleep 1
                   ((timeout--))
                 done
                 
-                if [ $timeout -eq 0 ]; then
-                  echo "Принудительное завершение..."
+                # Принудительное завершение, если не остановился
+                if kill -0 $pids 2>/dev/null; then
+                  echo "Принудительное завершение (SIGKILL)..."
                   kill -9 $pids || true
-                  sleep 3
+                  sleep 2
                 fi
               fi
-              
-              # Финальная проверка
-              if ps aux | grep "python3 mishakrug.py" | grep -v grep; then
-                echo "ОШИБКА: Процессы остались!"
-                exit 1
-              fi
             }
-          
-            # Вызов функции остановки
             stop_process
 
-            # Сохраняем .env во временный файл
+            # 2. Сохраняем .env (если существует)
             if [ -f .env ]; then
-              echo "Сохраняем .env файл..."
+              echo "Сохранение .env во временный файл..."
               cp .env /tmp/mishakrug_env_backup
             fi
 
-            # Очищаем папку (кроме .git и venv)
-            echo "Очищаем папку..."
-            shopt -s extglob
-            rm -rf !(.git|venv|.env)
+            # 3. Жесткий сброс репозитория (git reset --hard + pull)
+            echo "Сброс репозитория и обновление..."
+            git fetch origin
+            git reset --hard origin/main
+            git clean -fd  # Удаляет untracked файлы (кроме .env, т.к. он уже сохранён)
 
-            # Восстанавливаем .env
+            # 4. Восстанавливаем .env (если был сохранён)
             if [ -f /tmp/mishakrug_env_backup ]; then
-              echo "Восстанавливаем .env файл..."
+              echo "Восстановление .env..."
               mv /tmp/mishakrug_env_backup .env
             fi
-          
-            # Обновление и запуск
-            git pull origin main
+
+            # 5. Запуск бота
+            echo "Запуск бота..."
             source venv/bin/activate
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
-          
-            # Проверка запуска
+            
+            # Проверка, что процесс запустился
             sleep 3
-            if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
+            if ! pgrep -f "python3 mishakrug.py" >/dev/null; then
               echo "ОШИБКА: Процесс не запустился!"
               exit 1
             fi
-          
-            echo "Деплой успешно завершён!"
+
+            echo "✅ Деплой успешно завершён!"
