@@ -89,6 +89,7 @@ jobs:
           
             # Обновление и запуск
             git fetch origin
+            sleep 10
             git reset --hard origin/main
             git clean -fd
             # git pull origin main
