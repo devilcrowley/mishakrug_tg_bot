@@ -77,6 +77,9 @@ jobs:
             stop_process
           
             # Обновление и запуск (используем текущую ветку вместо main)
+            # Настройка Git для безопасной работы с директорией
+            git config --global --add safe.directory /opt/mishakrug_tg_bot
+            
             git fetch origin
             git checkout ${{ github.ref_name }}
             git pull origin ${{ github.ref_name }}
