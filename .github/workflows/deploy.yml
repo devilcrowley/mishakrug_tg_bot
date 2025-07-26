@@ -28,64 +28,78 @@ jobs:
           timeout: 30s
           command_timeout: 30m
           script: |
-            echo "Переход в рабочую директорию..."
-            cd /opt/mishakrug_tg_bot || { echo "Ошибка: Не удалось перейти в /opt/mishakrug_tg_bot"; exit 1; }
+            echo "Setup deployment directory..."
+            cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
+            sleep 5
 
-            # 1. Остановка текущего процесса (если запущен)
+            # Улучшенная остановка процессов
             stop_process() {
-              echo "Поиск запущенных процессов..."
-              pids=$(pgrep -f "python3 mishakrug.py" || true)
+              echo "Поиск процессов..."
+              # Точное совпадение имени процесса
+              pids=$(ps aux | grep "python3 mishakrug.py" | grep -v grep | awk '{print $2}' || true)
               
               if [ -n "$pids" ]; then
                 echo "Найдены процессы: $pids"
-                echo "Остановка..."
+                echo "Отправка SIGTERM..."
                 kill $pids || true
                 
-                # Ожидание завершения (10 сек)
+                # Ожидание завершения с таймаутом
                 timeout=10
-                while kill -0 $pids 2>/dev/null && [ $timeout -gt 0 ]; do
+                while [ $timeout -gt 0 ]; do
+                  if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
+                    break
+                  fi
                   sleep 1
                   ((timeout--))
                 done
                 
-                # Принудительное завершение, если не остановился
-                if kill -0 $pids 2>/dev/null; then
-                  echo "Принудительное завершение (SIGKILL)..."
+                if [ $timeout -eq 0 ]; then
+                  echo "Принудительное завершение..."
                   kill -9 $pids || true
-                  sleep 2
+                  sleep 3
                 fi
               fi
+              
+              # Финальная проверка
+              if ps aux | grep "python3 mishakrug.py" | grep -v grep; then
+                echo "ОШИБКА: Процессы остались!"
+                exit 1
+              fi
             }
+          
+            # Вызов функции остановки
             stop_process
 
-            # 2. Сохраняем .env (если существует)
+            # Сохраняем .env во временный файл
             if [ -f .env ]; then
-              echo "Сохранение .env во временный файл..."
+              echo "Сохраняем .env файл..."
               cp .env /tmp/mishakrug_env_backup
             fi
 
-            # 3. Жесткий сброс репозитория (git reset --hard + pull)
-            echo "Сброс репозитория и обновление..."
-            git fetch origin
-            git reset --hard origin/main
-            git clean -fd  # Удаляет untracked файлы (кроме .env, т.к. он уже сохранён)
+            # Очищаем папку (кроме .git и venv)
+            echo "Очищаем папку..."
+            shopt -s extglob
+            rm -rf !(.git|venv|.env)
 
-            # 4. Восстанавливаем .env (если был сохранён)
+            # Восстанавливаем .env
             if [ -f /tmp/mishakrug_env_backup ]; then
-              echo "Восстановление .env..."
+              echo "Восстанавливаем .env файл..."
               mv /tmp/mishakrug_env_backup .env
             fi
-
-            # 5. Запуск бота
-            echo "Запуск бота..."
+          
+            # Обновление и запуск
+            git fetch origin
+            git reset --hard origin/main
+            git clean -fd
+            # git pull origin main
             source venv/bin/activate
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
-            
-            # Проверка, что процесс запустился
+          
+            # Проверка запуска
             sleep 3
-            if ! pgrep -f "python3 mishakrug.py" >/dev/null; then
+            if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
               echo "ОШИБКА: Процесс не запустился!"
               exit 1
             fi
-
-            echo "✅ Деплой успешно завершён!"
+          
+            echo "Деплой успешно завершён!"
