@@ -88,6 +88,7 @@ jobs:
             fi
           
             # Обновление и запуск
+            git config --global --add safe.directory /opt/mishakrug_tg_bot
             git fetch origin
             sleep 10
             git reset --hard origin/main
