@@ -1,4 +1,4 @@
-name: Deploy Bot (Simple)
+name: Deploy Bot
 
 on:
   push:
@@ -20,16 +20,18 @@ jobs:
           timeout: 30s
           command_timeout: 30m
           script: |
-            echo "Starting deployment..."
+            echo "=== Starting deployment ==="
             
             # Stop old processes
             echo "Stopping old processes..."
-            pids=$(pgrep -f "python3 mishakrug.py" || true)
-            if [ -n "$pids" ]; then
-              echo "Found processes: $pids"
-              kill $pids || true
+            if pgrep -f "python3 mishakrug.py" > /dev/null 2>&1; then
+              echo "Found running processes, stopping them..."
+              pkill -f "python3 mishakrug.py" || true
               sleep 3
-              kill -9 $pids 2>/dev/null || true
+              pkill -9 -f "python3 mishakrug.py" || true
+              echo "Processes stopped"
+            else
+              echo "No running processes found"
             fi
             
             # Go to deployment directory
@@ -39,21 +41,22 @@ jobs:
             # Backup important files
             if [ -f "mishakrug_tg_bot/.env" ]; then
               echo "Backing up .env file..."
-              cp mishakrug_tg_bot/.env /tmp/env_backup || true
+              cp mishakrug_tg_bot/.env /tmp/env_backup 2>/dev/null || true
             fi
             
             if [ -d "mishakrug_tg_bot/venv" ]; then
               echo "Backing up virtual environment..."
-              cp -r mishakrug_tg_bot/venv /tmp/venv_backup || true
+              cp -r mishakrug_tg_bot/venv /tmp/venv_backup 2>/dev/null || true
             fi
             
-            # Remove old version
+            # Remove old version completely
             echo "Removing old version..."
-            rm -rf mishakrug_tg_bot || true
+            rm -rf mishakrug_tg_bot 2>/dev/null || true
             
-            # Clone repository
+            # Clone repository fresh
             echo "Cloning repository..."
             git clone https://github.com/devilcrowley/mishakrug_tg_bot.git
+            
             if [ ! -d "mishakrug_tg_bot" ]; then
               echo "ERROR: Failed to clone repository"
               exit 1
@@ -61,46 +64,54 @@ jobs:
             
             cd mishakrug_tg_bot
             
-            # Restore files
+            # Restore .env file
             if [ -f "/tmp/env_backup" ]; then
               echo "Restoring .env file..."
               cp /tmp/env_backup .env
-              rm /tmp/env_backup || true
+              rm /tmp/env_backup 2>/dev/null || true
             fi
             
             # Setup virtual environment
             if [ -d "/tmp/venv_backup" ]; then
               echo "Restoring virtual environment..."
               cp -r /tmp/venv_backup venv
-              rm -rf /tmp/venv_backup || true
+              rm -rf /tmp/venv_backup 2>/dev/null || true
             else
               echo "Creating new virtual environment..."
               python3 -m venv venv
+              if [ ! -d "venv" ]; then
+                echo "ERROR: Failed to create virtual environment"
+                exit 1
+              fi
             fi
             
             # Install dependencies
             echo "Installing dependencies..."
             source venv/bin/activate
+            
             if [ -f "requirements.txt" ]; then
               pip install -r requirements.txt
+              if [ $? -ne 0 ]; then
+                echo "ERROR: Failed to install dependencies"
+                exit 1
+              fi
             fi
             
             # Start bot
             echo "Starting bot..."
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
             
-            # Check if started
-            sleep 3
+            # Wait and check if started
+            sleep 5
             if pgrep -f "python3 mishakrug.py" > /dev/null; then
               echo "SUCCESS: Bot started successfully!"
               echo "PID: $(pgrep -f 'python3 mishakrug.py')"
+              echo "Deployment completed!"
             else
               echo "ERROR: Bot failed to start!"
               if [ -f "mishakrug.log" ]; then
-                echo "Last 10 lines of log:"
-                tail -10 mishakrug.log
+                echo "Last 20 lines of log:"
+                tail -20 mishakrug.log
               fi
               exit 1
             fi
-            
-            echo "Deployment completed successfully!"
