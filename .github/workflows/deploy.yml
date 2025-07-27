@@ -1,4 +1,4 @@
-name: Deploy Bot (Clean)
+name: Deploy Bot (Simple)
 
 on:
   push:
@@ -20,71 +20,87 @@ jobs:
           timeout: 30s
           command_timeout: 30m
           script: |
-            set -e
+            echo "Starting deployment..."
             
-            echo "=== Остановка старых процессов ==="
-            pkill -f "python3 mishakrug.py" || echo "Процессы не найдены"
-            sleep 2
+            # Stop old processes
+            echo "Stopping old processes..."
+            pids=$(pgrep -f "python3 mishakrug.py" || true)
+            if [ -n "$pids" ]; then
+              echo "Found processes: $pids"
+              kill $pids || true
+              sleep 3
+              kill -9 $pids 2>/dev/null || true
+            fi
             
-            echo "=== Подготовка директории ==="
+            # Go to deployment directory
+            echo "Preparing deployment directory..."
             cd /opt
             
-            # Сохраняем .env если есть
+            # Backup important files
             if [ -f "mishakrug_tg_bot/.env" ]; then
-              echo "Сохраняем .env файл..."
-              cp mishakrug_tg_bot/.env /tmp/mishakrug_env_backup
+              echo "Backing up .env file..."
+              cp mishakrug_tg_bot/.env /tmp/env_backup || true
             fi
             
-            # Сохраняем venv если есть
             if [ -d "mishakrug_tg_bot/venv" ]; then
-              echo "Сохраняем виртуальное окружение..."
-              cp -r mishakrug_tg_bot/venv /tmp/mishakrug_venv_backup
+              echo "Backing up virtual environment..."
+              cp -r mishakrug_tg_bot/venv /tmp/venv_backup || true
             fi
             
-            echo "=== Удаление старой версии ==="
-            rm -rf mishakrug_tg_bot
+            # Remove old version
+            echo "Removing old version..."
+            rm -rf mishakrug_tg_bot || true
             
-            echo "=== Клонирование репозитория ==="
+            # Clone repository
+            echo "Cloning repository..."
             git clone https://github.com/devilcrowley/mishakrug_tg_bot.git
+            if [ ! -d "mishakrug_tg_bot" ]; then
+              echo "ERROR: Failed to clone repository"
+              exit 1
+            fi
+            
             cd mishakrug_tg_bot
             
-            echo "=== Восстановление файлов ==="
-            # Восстанавливаем .env
-            if [ -f "/tmp/mishakrug_env_backup" ]; then
-              echo "Восстанавливаем .env файл..."
-              cp /tmp/mishakrug_env_backup .env
-              rm /tmp/mishakrug_env_backup
+            # Restore files
+            if [ -f "/tmp/env_backup" ]; then
+              echo "Restoring .env file..."
+              cp /tmp/env_backup .env
+              rm /tmp/env_backup || true
             fi
             
-            # Восстанавливаем или создаем venv
-            if [ -d "/tmp/mishakrug_venv_backup" ]; then
-              echo "Восстанавливаем виртуальное окружение..."
-              cp -r /tmp/mishakrug_venv_backup venv
-              rm -rf /tmp/mishakrug_venv_backup
+            # Setup virtual environment
+            if [ -d "/tmp/venv_backup" ]; then
+              echo "Restoring virtual environment..."
+              cp -r /tmp/venv_backup venv
+              rm -rf /tmp/venv_backup || true
             else
-              echo "Создаем новое виртуальное окружение..."
+              echo "Creating new virtual environment..."
               python3 -m venv venv
             fi
             
-            echo "=== Установка зависимостей ==="
+            # Install dependencies
+            echo "Installing dependencies..."
             source venv/bin/activate
             if [ -f "requirements.txt" ]; then
               pip install -r requirements.txt
             fi
             
-            echo "=== Запуск бота ==="
+            # Start bot
+            echo "Starting bot..."
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
             
-            echo "=== Проверка запуска ==="
+            # Check if started
             sleep 3
             if pgrep -f "python3 mishakrug.py" > /dev/null; then
-              echo "✅ Бот успешно запущен!"
+              echo "SUCCESS: Bot started successfully!"
               echo "PID: $(pgrep -f 'python3 mishakrug.py')"
             else
-              echo "❌ ОШИБКА: Бот не запустился!"
-              echo "Последние строки лога:"
-              tail -10 mishakrug.log || echo "Лог файл не найден"
+              echo "ERROR: Bot failed to start!"
+              if [ -f "mishakrug.log" ]; then
+                echo "Last 10 lines of log:"
+                tail -10 mishakrug.log
+              fi
               exit 1
             fi
             
-            echo "🎉 Деплой завершен успешно!"
+            echo "Deployment completed successfully!"
