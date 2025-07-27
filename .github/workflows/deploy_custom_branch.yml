@@ -25,14 +25,14 @@ jobs:
             
             # Stop old processes
             echo "Stopping old processes..."
-            if pgrep -f "python3 mishakrug.py" > /dev/null 2>&1; then
+            if pgrep -f "python3 mishakrug.py" >/dev/null 2>&1; then
               echo "Found running processes, stopping them..."
-              pkill -f "python3 mishakrug.py" || true
+              pgrep -f "python3 mishakrug.py" | xargs -r kill || true
               sleep 3
-              pkill -9 -f "python3 mishakrug.py" || true
+              pgrep -f "python3 mishakrug.py" | xargs -r kill -9 || true
               echo "Processes stopped"
             else
-              echo "No running processes found"
+            echo "No running processes found"
             fi
             
             # Go to deployment directory
