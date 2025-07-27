@@ -78,13 +78,19 @@ jobs:
 
             # Исправляем права доступа к Git-репозиторию
             echo "Исправляем права доступа к Git-репозиторию..."
-            if command -v sudo >/dev/null 2>&1; then
-              sudo chown -R mishadeploy:mishadeploy /opt/mishakrug_tg_bot/.git || echo "Не удалось изменить владельца через sudo"
-              sudo chmod -R 755 /opt/mishakrug_tg_bot/.git || echo "Не удалось изменить права через sudo"
-            else
-              echo "sudo недоступен, пытаемся исправить права напрямую..."
-              chown -R mishadeploy:mishadeploy /opt/mishakrug_tg_bot/.git 2>/dev/null || echo "Не удалось изменить владельца"
-              chmod -R 755 /opt/mishakrug_tg_bot/.git 2>/dev/null || echo "Не удалось изменить права"
+            
+            # Пытаемся исправить права без sudo
+            find /opt/mishakrug_tg_bot/.git -type f -exec chmod 644 {} \; 2>/dev/null || echo "Не удалось изменить права файлов"
+            find /opt/mishakrug_tg_bot/.git -type d -exec chmod 755 {} \; 2>/dev/null || echo "Не удалось изменить права директорий"
+            
+            # Если не получается, пересоздаем git репозиторий
+            if [ ! -w "/opt/mishakrug_tg_bot/.git/config" ]; then
+              echo "Git репозиторий заблокирован, пересоздаем..."
+              rm -rf .git 2>/dev/null || echo "Не удалось удалить .git"
+              git init
+              git remote add origin https://github.com/devilcrowley/mishakrug_tg_bot.git
+              git config user.email "mishadeploy@server.local"
+              git config user.name "mishadeploy"
             fi
             
             # Очищаем папку (кроме .git и venv)
@@ -104,17 +110,30 @@ jobs:
             
             # Пытаемся выполнить git операции с обработкой ошибок
             if ! git fetch origin; then
-              echo "Ошибка при выполнении git fetch, пытаемся исправить..."
-              git config --global user.email "mishadeploy@github.local"
-              git config --global user.name "mishadeploy"
-              git remote set-url origin $(git remote get-url origin)
-              git fetch origin || { echo "Критическая ошибка git fetch"; exit 1; }
-            fi
-            
-            if ! git reset --hard origin/main; then
-              echo "Ошибка при выполнении git reset, пытаемся альтернативный способ..."
-              git checkout main || git checkout -b main origin/main
-              git pull origin main || { echo "Критическая ошибка обновления кода"; exit 1; }
+              echo "Ошибка при выполнении git fetch, клонируем репозиторий заново..."
+              cd /opt
+              rm -rf mishakrug_tg_bot_backup 2>/dev/null
+              mv mishakrug_tg_bot mishakrug_tg_bot_backup 2>/dev/null || echo "Не удалось создать бэкап"
+              
+              git clone https://github.com/devilcrowley/mishakrug_tg_bot.git
+              cd mishakrug_tg_bot
+              
+              # Восстанавливаем .env и venv из бэкапа
+              if [ -f "/opt/mishakrug_tg_bot_backup/.env" ]; then
+                cp /opt/mishakrug_tg_bot_backup/.env .env
+              elif [ -f "/tmp/mishakrug_env_backup" ]; then
+                cp /tmp/mishakrug_env_backup .env
+              fi
+              
+              if [ -d "/opt/mishakrug_tg_bot_backup/venv" ]; then
+                cp -r /opt/mishakrug_tg_bot_backup/venv ./
+              fi
+            else
+              if ! git reset --hard origin/main; then
+                echo "Ошибка при выполнении git reset, пытаемся альтернативный способ..."
+                git checkout main || git checkout -b main origin/main
+                git pull origin main || { echo "Критическая ошибка обновления кода"; exit 1; }
+              fi
             fi
             
             git clean -fd || echo "Предупреждение: не удалось очистить рабочую директорию"
