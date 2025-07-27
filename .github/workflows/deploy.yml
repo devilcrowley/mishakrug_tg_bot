@@ -76,6 +76,17 @@ jobs:
               cp .env /tmp/mishakrug_env_backup
             fi
 
+            # Исправляем права доступа к Git-репозиторию
+            echo "Исправляем права доступа к Git-репозиторию..."
+            if command -v sudo >/dev/null 2>&1; then
+              sudo chown -R mishadeploy:mishadeploy /opt/mishakrug_tg_bot/.git || echo "Не удалось изменить владельца через sudo"
+              sudo chmod -R 755 /opt/mishakrug_tg_bot/.git || echo "Не удалось изменить права через sudo"
+            else
+              echo "sudo недоступен, пытаемся исправить права напрямую..."
+              chown -R mishadeploy:mishadeploy /opt/mishakrug_tg_bot/.git 2>/dev/null || echo "Не удалось изменить владельца"
+              chmod -R 755 /opt/mishakrug_tg_bot/.git 2>/dev/null || echo "Не удалось изменить права"
+            fi
+            
             # Очищаем папку (кроме .git и venv)
             echo "Очищаем папку..."
             shopt -s extglob
@@ -88,11 +99,41 @@ jobs:
             fi
           
             # Обновление и запуск
-            git fetch origin
-            git reset --hard origin/main
-            git clean -fd
-            # git pull origin main
+            echo "Выполняем git операции..."
+            git config --global --add safe.directory /opt/mishakrug_tg_bot
+            
+            # Пытаемся выполнить git операции с обработкой ошибок
+            if ! git fetch origin; then
+              echo "Ошибка при выполнении git fetch, пытаемся исправить..."
+              git config --global user.email "mishadeploy@github.local"
+              git config --global user.name "mishadeploy"
+              git remote set-url origin $(git remote get-url origin)
+              git fetch origin || { echo "Критическая ошибка git fetch"; exit 1; }
+            fi
+            
+            if ! git reset --hard origin/main; then
+              echo "Ошибка при выполнении git reset, пытаемся альтернативный способ..."
+              git checkout main || git checkout -b main origin/main
+              git pull origin main || { echo "Критическая ошибка обновления кода"; exit 1; }
+            fi
+            
+            git clean -fd || echo "Предупреждение: не удалось очистить рабочую директорию"
+            
+            # Проверяем и создаем виртуальное окружение если необходимо
+            if [ ! -d "venv" ]; then
+              echo "Создаем виртуальное окружение..."
+              python3 -m venv venv || { echo "Ошибка создания venv"; exit 1; }
+            fi
+            
+            echo "Активируем виртуальное окружение и устанавливаем зависимости..."
             source venv/bin/activate
+            
+            # Устанавливаем зависимости если есть requirements.txt
+            if [ -f "requirements.txt" ]; then
+              pip install -r requirements.txt || echo "Предупреждение: не удалось установить зависимости"
+            fi
+            
+            echo "Запускаем бота..."
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
           
             # Проверка запуска
