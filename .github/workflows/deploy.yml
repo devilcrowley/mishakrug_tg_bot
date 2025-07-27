@@ -1,23 +1,15 @@
-name: Deploy Bot
+name: Deploy Bot (Clean)
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Позволяет запускать workflow вручную
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Debug secrets
-        run: |
-          if [ -z "${{ secrets.SERVER_HOST }}" ]; then
-            echo "Error: SERVER_HOST is not set"
-            exit 1
-          fi
-          echo "SERVER_HOST is configured"
-
       - name: Deploy to server
         uses: appleboy/ssh-action@master
         with:
@@ -28,138 +20,71 @@ jobs:
           timeout: 30s
           command_timeout: 30m
           script: |
-            echo "Setup deployment directory..."
-            cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
-            sleep 5
-
-            # Улучшенная остановка процессов
-            stop_process() {
-              echo "Поиск процессов..."
-              # Точное совпадение имени процесса
-              pids=$(ps aux | grep "python3 mishakrug.py" | grep -v grep | awk '{print $2}' || true)
-              
-              if [ -n "$pids" ]; then
-                echo "Найдены процессы: $pids"
-                echo "Отправка SIGTERM..."
-                kill $pids || true
-                
-                # Ожидание завершения с таймаутом
-                timeout=10
-                while [ $timeout -gt 0 ]; do
-                  if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
-                    break
-                  fi
-                  sleep 1
-                  ((timeout--))
-                done
-                
-                if [ $timeout -eq 0 ]; then
-                  echo "Принудительное завершение..."
-                  kill -9 $pids || true
-                  sleep 3
-                fi
-              fi
-              
-              # Финальная проверка
-              if ps aux | grep "python3 mishakrug.py" | grep -v grep; then
-                echo "ОШИБКА: Процессы остались!"
-                exit 1
-              fi
-            }
-          
-            # Вызов функции остановки
-            stop_process
-
-            # Сохраняем .env во временный файл
-            if [ -f .env ]; then
+            set -e
+            
+            echo "=== Остановка старых процессов ==="
+            pkill -f "python3 mishakrug.py" || echo "Процессы не найдены"
+            sleep 2
+            
+            echo "=== Подготовка директории ==="
+            cd /opt
+            
+            # Сохраняем .env если есть
+            if [ -f "mishakrug_tg_bot/.env" ]; then
               echo "Сохраняем .env файл..."
-              cp .env /tmp/mishakrug_env_backup
-            fi
-
-            # Исправляем права доступа к Git-репозиторию
-            echo "Исправляем права доступа к Git-репозиторию..."
-            
-            # Пытаемся исправить права без sudo
-            find /opt/mishakrug_tg_bot/.git -type f -exec chmod 644 {} \; 2>/dev/null || echo "Не удалось изменить права файлов"
-            find /opt/mishakrug_tg_bot/.git -type d -exec chmod 755 {} \; 2>/dev/null || echo "Не удалось изменить права директорий"
-            
-            # Если не получается, пересоздаем git репозиторий
-            if [ ! -w "/opt/mishakrug_tg_bot/.git/config" ]; then
-              echo "Git репозиторий заблокирован, пересоздаем..."
-              rm -rf .git 2>/dev/null || echo "Не удалось удалить .git"
-              git init
-              git remote add origin https://github.com/devilcrowley/mishakrug_tg_bot.git
-              git config user.email "mishadeploy@server.local"
-              git config user.name "mishadeploy"
+              cp mishakrug_tg_bot/.env /tmp/mishakrug_env_backup
             fi
             
-            # Очищаем папку (кроме .git и venv)
-            echo "Очищаем папку..."
-            shopt -s extglob
-            rm -rf !(.git|venv|.env)
-
+            # Сохраняем venv если есть
+            if [ -d "mishakrug_tg_bot/venv" ]; then
+              echo "Сохраняем виртуальное окружение..."
+              cp -r mishakrug_tg_bot/venv /tmp/mishakrug_venv_backup
+            fi
+            
+            echo "=== Удаление старой версии ==="
+            rm -rf mishakrug_tg_bot
+            
+            echo "=== Клонирование репозитория ==="
+            git clone https://github.com/devilcrowley/mishakrug_tg_bot.git
+            cd mishakrug_tg_bot
+            
+            echo "=== Восстановление файлов ==="
             # Восстанавливаем .env
-            if [ -f /tmp/mishakrug_env_backup ]; then
+            if [ -f "/tmp/mishakrug_env_backup" ]; then
               echo "Восстанавливаем .env файл..."
-              mv /tmp/mishakrug_env_backup .env
+              cp /tmp/mishakrug_env_backup .env
+              rm /tmp/mishakrug_env_backup
             fi
-          
-            # Обновление и запуск
-            echo "Выполняем git операции..."
-            git config --global --add safe.directory /opt/mishakrug_tg_bot
             
-            # Пытаемся выполнить git операции с обработкой ошибок
-            if ! git fetch origin; then
-              echo "Ошибка при выполнении git fetch, клонируем репозиторий заново..."
-              cd /opt
-              rm -rf mishakrug_tg_bot_backup 2>/dev/null
-              mv mishakrug_tg_bot mishakrug_tg_bot_backup 2>/dev/null || echo "Не удалось создать бэкап"
-              
-              git clone https://github.com/devilcrowley/mishakrug_tg_bot.git
-              cd mishakrug_tg_bot
-              
-              # Восстанавливаем .env и venv из бэкапа
-              if [ -f "/opt/mishakrug_tg_bot_backup/.env" ]; then
-                cp /opt/mishakrug_tg_bot_backup/.env .env
-              elif [ -f "/tmp/mishakrug_env_backup" ]; then
-                cp /tmp/mishakrug_env_backup .env
-              fi
-              
-              if [ -d "/opt/mishakrug_tg_bot_backup/venv" ]; then
-                cp -r /opt/mishakrug_tg_bot_backup/venv ./
-              fi
+            # Восстанавливаем или создаем venv
+            if [ -d "/tmp/mishakrug_venv_backup" ]; then
+              echo "Восстанавливаем виртуальное окружение..."
+              cp -r /tmp/mishakrug_venv_backup venv
+              rm -rf /tmp/mishakrug_venv_backup
             else
-              if ! git reset --hard origin/main; then
-                echo "Ошибка при выполнении git reset, пытаемся альтернативный способ..."
-                git checkout main || git checkout -b main origin/main
-                git pull origin main || { echo "Критическая ошибка обновления кода"; exit 1; }
-              fi
+              echo "Создаем новое виртуальное окружение..."
+              python3 -m venv venv
             fi
             
-            git clean -fd || echo "Предупреждение: не удалось очистить рабочую директорию"
-            
-            # Проверяем и создаем виртуальное окружение если необходимо
-            if [ ! -d "venv" ]; then
-              echo "Создаем виртуальное окружение..."
-              python3 -m venv venv || { echo "Ошибка создания venv"; exit 1; }
-            fi
-            
-            echo "Активируем виртуальное окружение и устанавливаем зависимости..."
+            echo "=== Установка зависимостей ==="
             source venv/bin/activate
-            
-            # Устанавливаем зависимости если есть requirements.txt
             if [ -f "requirements.txt" ]; then
-              pip install -r requirements.txt || echo "Предупреждение: не удалось установить зависимости"
+              pip install -r requirements.txt
             fi
             
-            echo "Запускаем бота..."
+            echo "=== Запуск бота ==="
             nohup python3 mishakrug.py > mishakrug.log 2>&1 &
-          
-            # Проверка запуска
+            
+            echo "=== Проверка запуска ==="
             sleep 3
-            if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
-              echo "ОШИБКА: Процесс не запустился!"
+            if pgrep -f "python3 mishakrug.py" > /dev/null; then
+              echo "✅ Бот успешно запущен!"
+              echo "PID: $(pgrep -f 'python3 mishakrug.py')"
+            else
+              echo "❌ ОШИБКА: Бот не запустился!"
+              echo "Последние строки лога:"
+              tail -10 mishakrug.log || echo "Лог файл не найден"
               exit 1
             fi
-          
-            echo "Деплой успешно завершён!"
+            
+            echo "🎉 Деплой завершен успешно!"
