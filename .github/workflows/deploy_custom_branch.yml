@@ -1,15 +1,23 @@
-name: Deploy Bot from Custom Branch
+name: Deploy Bot
 
 on:
   push:
     branches:
-      - '**'
-  workflow_dispatch:
+      - main
+  workflow_dispatch:  # Позволяет запускать workflow вручную
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug secrets
+        run: |
+          if [ -z "${{ secrets.SERVER_HOST }}" ]; then
+            echo "Error: SERVER_HOST is not set"
+            exit 1
+          fi
+          echo "SERVER_HOST is configured"
+
       - name: Deploy to server
         uses: appleboy/ssh-action@master
         with:
@@ -19,122 +27,61 @@ jobs:
           port: 22
           timeout: 30s
           command_timeout: 30m
+          # debug: true
           script: |
-            BRANCH_NAME="${{ github.ref_name }}"
-            echo "=== Starting deployment of branch: $BRANCH_NAME ==="
-            
-            # Stop old processes
-            echo "Stopping old processes..."
-            PIDS=$(pgrep -f "python3 mishakrug.py" 2>/dev/null || echo "")
-            if [ -n "$PIDS" ]; then
-              echo "Found processes: $PIDS"
-              for pid in $PIDS; do
-                kill "$pid" 2>/dev/null || true
-              done
-              sleep 3
-              # Force kill remaining
-              REMAINING=$(pgrep -f "python3 mishakrug.py" 2>/dev/null || echo "")
-              if [ -n "$REMAINING" ]; then
-                for pid in $REMAINING; do
-                  kill -9 "$pid" 2>/dev/null || true
-                done
-              fi
-              echo "Processes stopped"
-            else
-              echo "No running processes found"
-            fi
-            
-            # Go to deployment directory
-            echo "Preparing deployment directory..."
-            cd /opt
-            
-            # Backup important files
-            if [ -f "mishakrug_tg_bot/.env" ]; then
-              echo "Backing up .env file..."
-              cp mishakrug_tg_bot/.env /tmp/env_backup 2>/dev/null || true
-            fi
-            
-            if [ -d "mishakrug_tg_bot/venv" ]; then
-              echo "Backing up virtual environment..."
-              cp -r mishakrug_tg_bot/venv /tmp/venv_backup 2>/dev/null || true
-            fi
-            
-            # Remove old version completely
-            echo "Removing old version..."
-            rm -rf mishakrug_tg_bot 2>/dev/null || true
-            
-            # Clone specific branch
-            echo "Cloning branch: $BRANCH_NAME..."
-            if git clone -b "$BRANCH_NAME" https://github.com/devilcrowley/mishakrug_tg_bot.git; then
-              echo "Successfully cloned branch $BRANCH_NAME"
-            else
-              echo "Failed to clone branch $BRANCH_NAME, trying main branch..."
-              git clone https://github.com/devilcrowley/mishakrug_tg_bot.git
-              cd mishakrug_tg_bot
-              git checkout "$BRANCH_NAME"
-              if [ $? -ne 0 ]; then
-                echo "ERROR: Branch $BRANCH_NAME not found"
-                exit 1
-              fi
-              cd ..
-            fi
-            
-            if [ ! -d "mishakrug_tg_bot" ]; then
-              echo "ERROR: Failed to clone repository"
-              exit 1
-            fi
-            
-            cd mishakrug_tg_bot
-            
-            # Restore .env file
-            if [ -f "/tmp/env_backup" ]; then
-              echo "Restoring .env file..."
-              cp /tmp/env_backup .env
-              rm /tmp/env_backup 2>/dev/null || true
-            fi
-            
-            # Setup virtual environment
-            if [ -d "/tmp/venv_backup" ]; then
-              echo "Restoring virtual environment..."
-              cp -r /tmp/venv_backup venv
-              rm -rf /tmp/venv_backup 2>/dev/null || true
-            else
-              echo "Creating new virtual environment..."
-              python3 -m venv venv
-              if [ ! -d "venv" ]; then
-                echo "ERROR: Failed to create virtual environment"
-                exit 1
-              fi
-            fi
-            
-            # Install dependencies
-            echo "Installing dependencies..."
-            source venv/bin/activate
-            
-            if [ -f "requirements.txt" ]; then
-              pip install -r requirements.txt
-              if [ $? -ne 0 ]; then
-                echo "ERROR: Failed to install dependencies"
-                exit 1
-              fi
-            fi
-            
-            # Start bot
-            echo "Starting bot..."
-            nohup python3 mishakrug.py > mishakrug.log 2>&1 &
-            
-            # Wait and check if started
+            # debug_mode set -x
+            echo "Setup deployment directory..."
+            cd /opt/mishakrug_tg_bot || { echo "Failed to cd into /opt/mishakrug_tg_bot"; exit 1; }
             sleep 5
-            if pgrep -f "python3 mishakrug.py" > /dev/null; then
-              echo "SUCCESS: Bot started successfully!"
-              echo "PID: $(pgrep -f 'python3 mishakrug.py')"
-              echo "Branch: $BRANCH_NAME"
-              echo "Deployment completed!"
-            else
-              echo "ERROR: Bot failed to start!"
-              if [ -f "mishakrug.log" ]; then
-                echo "Last 20 lines of log:"
-                tail -20 mishakrug.log
+
+            # Улучшенная остановка процессов
+            stop_process() {
+            echo "Поиск процессов..."
+            # Точное совпадение имени процесса
+            pids=$(ps aux | grep "python3 mishakrug.py" | grep -v grep || true)
+            
+            if [ -n "$pids" ]; then
+              echo "Найдены процессы: $pids"
+              echo "Отправка SIGTERM..."
+              kill $pids || true
+              
+              # Ожидание завершения с таймаутом
+              timeout=10
+              while [ $timeout -gt 0 ]; do
+                if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
+                  break
+                fi
+                sleep 1
+                ((timeout--))
+              done
+              
+              if [ $timeout -eq 0 ]; then
+                echo "Принудительное завершение..."
+                kill -9 $pids || true
+                sleep 3
               fi
+            fi
+            
+            # Финальная проверка
+            if ps aux | grep "python3 mishakrug.py" | grep -v grep; then
+              echo "ОШИБКА: Процессы остались!"
               exit 1
             fi
+            }
+          
+            # Вызов функции остановки
+            stop_process
+          
+            # Обновление и запуск
+            git pull origin main
+            source venv/bin/activate
+            nohup python3 mishakrug.py > mishakrug.log 2>&1 &
+          
+            # Проверка запуска
+            sleep 3
+            if ! ps aux | grep "python3 mishakrug.py" | grep -v grep >/dev/null; then
+              echo "ОШИБКА: Процесс не запустился!"
+            exit 1
+            fi
+          
+            echo "Деплой успешно завершён!"
